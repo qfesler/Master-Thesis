@@ -1,0 +1,26 @@
+--cpu Cortex-M0
+"firstboard\system_stm32f0xx.o"
+"firstboard\stm32f0xx_hal_i2c_ex.o"
+"firstboard\stm32f0xx_hal_gpio.o"
+"firstboard\stm32f0xx_hal_pwr_ex.o"
+"firstboard\stm32f0xx_hal_pwr.o"
+"firstboard\stm32f0xx_hal_flash_ex.o"
+"firstboard\stm32f0xx_hal_tim.o"
+"firstboard\stm32f0xx_hal_spi.o"
+"firstboard\stm32f0xx_hal_rcc_ex.o"
+"firstboard\stm32f0xx_hal_dma.o"
+"firstboard\stm32f0xx_hal_tim_ex.o"
+"firstboard\stm32f0xx_hal_rcc.o"
+"firstboard\stm32f0xx_hal_flash.o"
+"firstboard\stm32f0xx_hal_spi_ex.o"
+"firstboard\stm32f0xx_hal.o"
+"firstboard\stm32f0xx_hal_i2c.o"
+"firstboard\stm32f0xx_hal_cortex.o"
+"firstboard\startup_stm32f072xb.o"
+"firstboard\main.o"
+"firstboard\stm32f0xx_it.o"
+"firstboard\stm32f0xx_hal_msp.o"
+--library_type=microlib --strict --scatter "FirstBoard\FirstBoard.sct"
+--diag_suppress=L6329 --summary_stderr --info summarysizes --map --load_addr_map_info --xref --callgraph --symbols
+--info sizes --info totals --info unused --info veneers
+--list "FirstBoard.map" -o FirstBoard\FirstBoard.axf
