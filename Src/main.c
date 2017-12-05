@@ -64,6 +64,8 @@ void DWM_Init(void);
 uint32_t uint8TOuint32(uint8_t *data);
 void DWM_ReadSPI(uint8_t adress, uint8_t *data, uint16_t len);
 void Error_Fct(void);
+void Uint32TOuint8 ( uint32_t from, uint8_t *to );
+void DWM_WriteSPI(uint8_t address, uint8_t *data, uint16_t len);
 /* USER CODE END PFP */
 
 /* USER CODE BEGIN 0 */
@@ -100,6 +102,7 @@ int main(void)
   /* USER CODE BEGIN 2 */
 	
 	/* initialisation of the DecaWave */
+	HAL_Delay(10); //time for the DW to go from Wakeup to init and then IDLE
 	DWM_Init();
 	
   /* USER CODE END 2 */
@@ -309,6 +312,15 @@ void DWM_Init(void){
 	}
 }
 
+void DWM_WriteSPI(uint8_t address, uint8_t *data, uint16_t len){
+	uint8_t writeAdr = 0 | (address & 0x3F) | 0x80;
+	HAL_GPIO_WritePin(SPI1_CS_GPIO_Port, SPI1_CS_Pin, GPIO_PIN_RESET);
+	HAL_SPI_Transmit(&hspi1, &writeAdr, 1, HAL_MAX_DELAY);
+	HAL_SPI_Transmit(&hspi1, data, len, HAL_MAX_DELAY);
+	HAL_Delay(100);
+	HAL_GPIO_WritePin(SPI1_CS_GPIO_Port, SPI1_CS_Pin, GPIO_PIN_SET);
+}
+
 void DWM_ReadSPI(uint8_t adress, uint8_t *data, uint16_t len){
 	uint8_t readAdr = 0 | (adress & 0x3F) ;
 	uint8_t DUMMYBYTE[len];
@@ -325,6 +337,13 @@ void DWM_ReadSPI(uint8_t adress, uint8_t *data, uint16_t len){
 
 uint32_t uint8TOuint32(uint8_t *data){
 	return 0 | (data[3] << 24) | (data[2] << 16) | (data[1] << 8) | data[0];
+}
+
+void Uint32TOuint8 ( uint32_t from, uint8_t *to ) {
+	to[3] = (from & 0xFF000000) >> 24;
+	to[2] = (from & 0xFF0000) >> 16;
+	to[1] = (from & 0xFF00) >> 8;
+	to[0] = from & 0xFF;
 }
 
 void Error_Fct(void){
