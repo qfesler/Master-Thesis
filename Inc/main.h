@@ -99,6 +99,7 @@
 
 /* register */
 #define DWM_ID_REG 0x00
+#define DW1000_REGISTER_PMSC_CTRL0			0x36
 
 /* USER CODE END Private defines */
 
