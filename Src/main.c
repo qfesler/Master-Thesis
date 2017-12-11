@@ -344,22 +344,28 @@ void DWM_reset(void){
 	TxUint8[1] = 0x00;
 	TxUint8[2] = 0x01;
 	TxUint8[3] = 0x03;
-	DWM_WriteSPI(DWM1000_REG_PMSC, TxUint8, 4);
+	HAL_GPIO_WritePin(SPI1_CS_GPIO_Port, SPI1_CS_Pin, GPIO_PIN_RESET);
+	HAL_SPI_Transmit(&hspi1, TxUint8, 4, HAL_MAX_DELAY);
+	HAL_GPIO_WritePin(SPI1_CS_GPIO_Port, SPI1_CS_Pin, GPIO_PIN_SET);
 
 	TxUint8[0] = 0xED;
 	TxUint8[1] = 0x06;
 	TxUint8[2] = 0x00;
 	TxUint8[3] = 0x80;
-	DWM_WriteSPI(DWM1000_REG_PMSC, TxUint8, 4);
-
+	HAL_GPIO_WritePin(SPI1_CS_GPIO_Port, SPI1_CS_Pin, GPIO_PIN_RESET);
+	HAL_SPI_Transmit(&hspi1, TxUint8, 4, HAL_MAX_DELAY);
+	HAL_GPIO_WritePin(SPI1_CS_GPIO_Port, SPI1_CS_Pin, GPIO_PIN_SET);
+	
 	HAL_Delay(1);
 
 	TxUint8[0] = 0xF6;
 	TxUint8[1] = 0x00;
 	TxUint8[2] = 0x00;
 	TxUint8[3] = 0x02;
-	DWM_WriteSPI(DWM1000_REG_PMSC, TxUint8, 4);
-
+	HAL_GPIO_WritePin(SPI1_CS_GPIO_Port, SPI1_CS_Pin, GPIO_PIN_RESET);
+	HAL_SPI_Transmit(&hspi1, TxUint8, 4, HAL_MAX_DELAY);
+	HAL_GPIO_WritePin(SPI1_CS_GPIO_Port, SPI1_CS_Pin, GPIO_PIN_SET);
+	
 }
 
 /* Check DWM ID , goes into error loop if bad ID */
