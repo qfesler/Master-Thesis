@@ -246,7 +246,7 @@ static void MX_GPIO_Init(void)
 
   /*Configure GPIO pin : B1_Pin */
   GPIO_InitStruct.Pin = B1_Pin;
-  GPIO_InitStruct.Mode = GPIO_MODE_EVT_RISING;
+  GPIO_InitStruct.Mode = GPIO_MODE_IT_RISING_FALLING;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   HAL_GPIO_Init(B1_GPIO_Port, &GPIO_InitStruct);
 
@@ -282,12 +282,25 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Alternate = GPIO_AF0_SPI2;
   HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
 
+  /*Configure GPIO pin : SPI_IRQ_Pin */
+  GPIO_InitStruct.Pin = SPI_IRQ_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_IT_FALLING;
+  GPIO_InitStruct.Pull = GPIO_PULLUP;
+  HAL_GPIO_Init(SPI_IRQ_GPIO_Port, &GPIO_InitStruct);
+
   /*Configure GPIO pin : SPI1_CS_Pin */
   GPIO_InitStruct.Pin = SPI1_CS_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
   GPIO_InitStruct.Pull = GPIO_PULLUP;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(SPI1_CS_GPIO_Port, &GPIO_InitStruct);
+
+  /* EXTI interrupt init*/
+  HAL_NVIC_SetPriority(EXTI0_1_IRQn, 0, 0);
+  HAL_NVIC_EnableIRQ(EXTI0_1_IRQn);
+
+  HAL_NVIC_SetPriority(EXTI2_3_IRQn, 0, 0);
+  HAL_NVIC_EnableIRQ(EXTI2_3_IRQn);
 
 }
 
@@ -296,48 +309,48 @@ static void MX_GPIO_Init(void)
 
 void DWM_reset(void){
 	/* reset : 	- set SYSCLK to 01
-							- Clear SOFTRESET 
+							- Clear SOFTRESET
 							- set SOFTRESET
 							- then, load LDE (see manual p 23-24) */
-	
+
 	uint8_t RxUint8[4];
 	uint8_t TxUint8[4];
-	
+
 	// Getting PMSC_CTRL0 register
-	DWM_ReadSPI(DW1000_REGISTER_PMSC_CTRL0, RxUint8,4);
+	DWM_ReadSPI(DWM1000_REG_PMSC, RxUint8,4);
 	uint32_t RxUint32 = uint8TOuint32(RxUint8);
-	
+
 	// Set SYSCLKS bits to 01
 	RxUint32 = ( RxUint32 & 0xFFFFFFFC ) | 1;
 	Uint32TOuint8 ( RxUint32, TxUint8 );
-	DWM_WriteSPI(DW1000_REGISTER_PMSC_CTRL0, TxUint8, 4);
-	
+	DWM_WriteSPI(DWM1000_REG_PMSC, TxUint8, 4);
+
 	// Clear SOFTRESET bits
 	RxUint32 &= 0x0FFFFFFF;
 	Uint32TOuint8 ( RxUint32, TxUint8 );
-	DWM_WriteSPI(DW1000_REGISTER_PMSC_CTRL0, TxUint8, 4);
-	
+	DWM_WriteSPI(DWM1000_REG_PMSC, TxUint8, 4);
+
 	// Set SOFTRESET bits
 	RxUint32 |= 0xF0000000;
 	RxUint32 &= 0xFFFFFFFC;
 	Uint32TOuint8 ( RxUint32, TxUint8 );
-	DWM_WriteSPI(DW1000_REGISTER_PMSC_CTRL0, TxUint8, 4);
-	
+	DWM_WriteSPI(DWM1000_REG_PMSC, TxUint8, 4);
+
 	HAL_Delay(5);
 
         // Load the LDE algorithm microcode into LDE RAM or disable LDE execution (clear LDERUNE)
-				
+
 	TxUint8[0] = 0xF6;
 	TxUint8[1] = 0x00;
 	TxUint8[2] = 0x01;
 	TxUint8[3] = 0x03;
-	DWM_WriteSPI(DW1000_REGISTER_PMSC_CTRL0, TxUint8, 4);
+	DWM_WriteSPI(DWM1000_REG_PMSC, TxUint8, 4);
 
 	TxUint8[0] = 0xED;
 	TxUint8[1] = 0x06;
 	TxUint8[2] = 0x00;
 	TxUint8[3] = 0x80;
-	DWM_WriteSPI(DW1000_REGISTER_PMSC_CTRL0, TxUint8, 4);
+	DWM_WriteSPI(DWM1000_REG_PMSC, TxUint8, 4);
 
 	HAL_Delay(1);
 
@@ -345,21 +358,49 @@ void DWM_reset(void){
 	TxUint8[1] = 0x00;
 	TxUint8[2] = 0x00;
 	TxUint8[3] = 0x02;
-	DWM_WriteSPI(DW1000_REGISTER_PMSC_CTRL0, TxUint8, 4);
-	
+	DWM_WriteSPI(DWM1000_REG_PMSC, TxUint8, 4);
+
 }
 
 /* Check DWM ID , goes into error loop if bad ID */
 void DWM_Init(void){
-	uint8_t Decawave_ID[4];
-	uint32_t Decawave_ID32;
-	DWM_ReadSPI(DWM_ID_REG, Decawave_ID, 4);
-	Decawave_ID32 = uint8TOuint32(Decawave_ID);
-	if (Decawave_ID32 != DW_ID){
+
+  DWM_reset();
+
+	uint8_t SPIRxBuffer8[4];
+	uint32_t SPIRxBuffer32;
+  uint8_t SPITxBuffer8[4];
+	uint32_t SPITxBuffer32;
+
+  // Check DW ID
+	DWM_ReadSPI(DWM1000_REG_DEV_ID, SPIRxBuffer8, 4);
+	SPIRxBuffer32 = uint8TOuint32(SPIRxBuffer8);
+	if (SPIRxBuffer32 != 0xDECA0130){
 		Error_Fct();
 	}
-	DWM_reset();
-	
+
+  // RXAUTR: Receiver auto-re-enable
+  DWM_ReadSPI(DWM1000_REG_SYS_CFG, SPIRxBuffer8, 4);
+  SPIRxBuffer32 = uint8TOuint32(SPIRxBuffer8);
+  SPITxBuffer32 = SPIRxBuffer32 | 0x20000000;
+  Uint32TOuint8(SPITxBuffer32, SPITxBuffer8);
+  DWM_WriteSPI(DWM1000_REG_SYS_CFG, SPITxBuffer8, 4);
+
+  // setup of the irq : MASK 0x00000080 TX OK
+                      //MASK 0x00002000 RX FINISHED
+                      //MASK 0x00004000 RX NO ERROR
+  DWM_ReadSPI(DWM1000_REG_SYS_MASK, SPIRxBuffer8, 4);
+  SPIRxBuffer32 = uint8TOuint32(SPIRxBuffer8);
+  SPITxBuffer32 = SPIRxBuffer32 | 0x00000080; // TX OK
+  SPITxBuffer32 = SPITxBuffer32 | 0x00004000; // RX OK NO ERROR
+  Uint32TOuint8(SPITxBuffer32, SPITxBuffer8);
+  DWM_WriteSPI(DWM1000_REG_SYS_MASK, SPITxBuffer8, 4);
+
+  // Frame filtering
+
+  // antenna delay
+
+	// /!\ ....
 }
 
 void DWM_WriteSPI(uint8_t address, uint8_t *data, uint16_t len){
@@ -403,6 +444,18 @@ void Error_Fct(void){
 	}
 }
 
+void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin){
+	if (GPIO_Pin != SPI_IRQ_Pin){return;}
+	
+	uint8_t RxBuffer[4];
+	uint32_t StatusRegister;
+	// Getting status Register
+	DWM_ReadSPI(DWM1000_REG_SYS_STATUS, RxBuffer, 4);
+	StatusRegister = uint8TOuint32(RxBuffer);
+	
+	
+	
+}
 /* USER CODE END 4 */
 
 /**
