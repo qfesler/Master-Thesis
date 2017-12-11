@@ -1,0 +1,9 @@
+firstboard\retarget_io.o: C:\Keil_v5\ARM\PACK\Keil\ARM_Compiler\1.3.1\Source\retarget_io.c
+firstboard\retarget_io.o: C:\Keil_v5\ARM\ARMCC\Bin\..\include\string.h
+firstboard\retarget_io.o: C:\Keil_v5\ARM\ARMCC\Bin\..\include\stdint.h
+firstboard\retarget_io.o: C:\Keil_v5\ARM\ARMCC\Bin\..\include\stdio.h
+firstboard\retarget_io.o: C:\Keil_v5\ARM\ARMCC\Bin\..\include\stdlib.h
+firstboard\retarget_io.o: C:\Keil_v5\ARM\ARMCC\Bin\..\include\assert.h
+firstboard\retarget_io.o: C:\Keil_v5\ARM\ARMCC\Bin\..\include\rt_sys.h
+firstboard\retarget_io.o: .\RTE\_FirstBoard\RTE_Components.h
+firstboard\retarget_io.o: C:\Keil_v5\ARM\PACK\Keil\ARM_Compiler\1.3.1\Include\EventRecorder.h

@@ -28,3 +28,4 @@ firstboard\main.o: ../Drivers/STM32F0xx_HAL_Driver/Inc/stm32f0xx_hal_pwr.h
 firstboard\main.o: ../Drivers/STM32F0xx_HAL_Driver/Inc/stm32f0xx_hal_pwr_ex.h
 firstboard\main.o: ../Drivers/STM32F0xx_HAL_Driver/Inc/stm32f0xx_hal_spi.h
 firstboard\main.o: ../Drivers/STM32F0xx_HAL_Driver/Inc/stm32f0xx_hal_spi_ex.h
+firstboard\main.o: C:\Keil_v5\ARM\PACK\Keil\ARM_Compiler\1.3.1\Include\EventRecorder.h

@@ -41,7 +41,8 @@
 #include "stm32f0xx_hal.h"
 
 /* USER CODE BEGIN Includes */
-
+#include "EventRecorder.h"              // Keil.ARM Compiler::Compiler:Event Recorder
+#include "stdio.h"
 /* USER CODE END Includes */
 
 /* Private variables ---------------------------------------------------------*/
@@ -77,7 +78,7 @@ int main(void)
 {
 
   /* USER CODE BEGIN 1 */
-
+	EventRecorderInitialize (EventRecordAll, 1);
   /* USER CODE END 1 */
 
   /* MCU Configuration----------------------------------------------------------*/
@@ -101,7 +102,7 @@ int main(void)
   MX_SPI1_Init();
 
   /* USER CODE BEGIN 2 */
-	
+	printf("Hello World \n ");
 	/* initialisation of the DecaWave */
 	HAL_Delay(10); //time for the DW to go from Wakeup to init and then IDLE
 	DWM_Init();
@@ -382,6 +383,7 @@ void DWM_Init(void){
 	DWM_ReadSPI(DWM1000_REG_DEV_ID, SPIRxBuffer8, 4);
 	SPIRxBuffer32 = uint8TOuint32(SPIRxBuffer8);
 	if (SPIRxBuffer32 != 0xDECA0130){
+		printf("Wrong DW ID \n");
 		Error_Fct();
 	}
 
@@ -459,7 +461,10 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin){
 	DWM_ReadSPI(DWM1000_REG_SYS_STATUS, RxBuffer, 4);
 	StatusRegister = uint8TOuint32(RxBuffer);
 	
-	
+	// check if Tx OK
+	if (){
+		
+	}
 	
 }
 /* USER CODE END 4 */

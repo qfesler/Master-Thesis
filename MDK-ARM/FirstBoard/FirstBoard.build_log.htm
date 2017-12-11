@@ -22,15 +22,40 @@ Dialog DLL:      TARMCM1.DLL V1.13.0.0
  
 <h2>Project:</h2>
 C:\Users\Quentin\Desktop\F072-TEST\Master Thesis\1board\FirstBoard\MDK-ARM\FirstBoard.uvprojx
-Project File Date:  12/10/2017
+Project File Date:  12/11/2017
 
 <h2>Output:</h2>
 *** Using Compiler 'V5.06 update 5 (build 528)', folder: 'C:\Keil_v5\ARM\ARMCC\Bin'
 Build target 'FirstBoard'
+compiling stm32f0xx_hal_i2c_ex.c...
+compiling system_stm32f0xx.c...
+compiling stm32f0xx_hal_gpio.c...
+compiling stm32f0xx_hal_pwr_ex.c...
+compiling stm32f0xx_hal_flash_ex.c...
+compiling stm32f0xx_hal_pwr.c...
+compiling stm32f0xx_hal_tim.c...
+compiling stm32f0xx_hal_rcc_ex.c...
+compiling stm32f0xx_hal_dma.c...
+compiling stm32f0xx_hal_spi.c...
+compiling stm32f0xx_hal_tim_ex.c...
+compiling stm32f0xx_hal_flash.c...
+compiling stm32f0xx_hal_rcc.c...
+compiling stm32f0xx_hal_spi_ex.c...
+compiling stm32f0xx_hal.c...
+assembling startup_stm32f072xb.s...
+compiling stm32f0xx_hal_cortex.c...
+compiling stm32f0xx_hal_i2c.c...
 compiling main.c...
+../Src/main.c(459): warning:  #550-D: variable "StatusRegister"  was set but never used
+  	uint32_t StatusRegister;
+../Src/main.c: 1 warning, 0 errors
+compiling stm32f0xx_it.c...
+compiling retarget_io.c...
+compiling stm32f0xx_hal_msp.c...
+compiling EventRecorder.c...
 linking...
-Program Size: Code=5382 RO-data=242 RW-data=16 ZI-data=1640  
-"FirstBoard\FirstBoard.axf" - 0 Error(s), 0 Warning(s).
+Program Size: Code=6670 RO-data=266 RW-data=32 ZI-data=2952  
+"FirstBoard\FirstBoard.axf" - 0 Error(s), 1 Warning(s).
 
 <h2>Software Packages used:</h2>
 
@@ -41,19 +66,36 @@ Package Vendor: ARM
    * Component: CORE Version: 5.0.1
 
 Package Vendor: Keil
+                http://www.keil.com/pack/Keil.ARM_Compiler.1.3.1.pack
+                Keil.ARM_Compiler.1.3.1
+                Keil ARM Compiler extensions for ARM Compiler 5 and ARM Compiler 6
+   * Component: STDOUT Variant: EVR Version: 1.2.0
+   * Component: Event Recorder Variant: DAP Version: 1.1.0
+
+Package Vendor: Keil
                 http://www.keil.com/pack/Keil.STM32F0xx_DFP.1.5.0.pack
                 Keil.STM32F0xx_DFP.1.5.0
                 STMicroelectronics STM32F0 Series Device Support and Examples
 
 <h2>Collection of Component include folders:</h2>
+  .\RTE\Compiler
   .\RTE\_FirstBoard
   C:\Keil_v5\ARM\PACK\ARM\CMSIS\5.0.1\CMSIS\Include
+  C:\Keil_v5\ARM\PACK\Keil\ARM_Compiler\1.3.1\Include
   C:\Keil_v5\ARM\PACK\Keil\STM32F0xx_DFP\1.5.0\Device\Include
 
 <h2>Collection of Component Files used:</h2>
 
+   * Component: Keil.ARM Compiler::Compiler:I/O:STDOUT:EVR:1.2.0
+      Source file:   Source\retarget_io.c
+
+   * Component: Keil.ARM Compiler::Compiler:Event Recorder:DAP:1.1.0
+      Include file:  Config\EventRecorderConf.h
+      Include file:  Include\EventRecorder.h
+      Source file:   Source\EventRecorder.c
+
    * Component: ARM::CMSIS:CORE:5.0.1
-Build Time Elapsed:  00:00:05
+Build Time Elapsed:  00:00:27
 </pre>
 </body>
 </html>
