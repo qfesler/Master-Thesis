@@ -71,6 +71,9 @@ void DWM_WriteSPI(uint8_t address, uint8_t *data, uint16_t len);
 /* USER CODE END PFP */
 
 /* USER CODE BEGIN 0 */
+// Boolean variables
+int TxOk = 0;
+int RxOk = 0;
 
 /* USER CODE END 0 */
 
@@ -399,14 +402,19 @@ void DWM_Init(void){
                       //MASK 0x00004000 RX NO ERROR
   DWM_ReadSPI(DWM1000_REG_SYS_MASK, SPIRxBuffer8, 4);
   SPIRxBuffer32 = uint8TOuint32(SPIRxBuffer8);
-  SPITxBuffer32 = SPIRxBuffer32 | 0x00000080; // TX OK
-  SPITxBuffer32 = SPITxBuffer32 | 0x00004000; // RX OK NO ERROR
+  SPITxBuffer32 = SPIRxBuffer32 | TX_OK_MASK; // TX OK
+  SPITxBuffer32 = SPITxBuffer32 | RX_NO_ERROR_MASK; // RX OK NO ERROR
   Uint32TOuint8(SPITxBuffer32, SPITxBuffer8);
   DWM_WriteSPI(DWM1000_REG_SYS_MASK, SPITxBuffer8, 4);
 
   // Frame filtering
 
   // antenna delay
+	uint16_t delayuint16 = ANTENNA_DELAY;
+	uint8_t delayuint8[2];
+	delayuint8[1] = (delayuint16 & 0xFF00) >>8;
+	delayuint8[0] = (delayuint16 & 0xFF);
+	DWM_WriteSPI(DWM1000_REG_TX_ANTD, delayuint8, 2);
 
 	// /!\ ....
 }
@@ -456,16 +464,30 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin){
 	if (GPIO_Pin != SPI_IRQ_Pin){return;}
 	
 	uint8_t RxBuffer[4];
+	uint8_t TxBuffer[4];
 	uint32_t StatusRegister;
+	uint32_t ack = 0;
 	// Getting status Register
 	DWM_ReadSPI(DWM1000_REG_SYS_STATUS, RxBuffer, 4);
 	StatusRegister = uint8TOuint32(RxBuffer);
 	
 	// check if Tx OK
-	if (){
-		
+	if (StatusRegister & TX_OK_MASK){
+		TxOk = 1;
+		ack |= TX_OK_MASK;
 	}
-	
+	// check if RX finished
+	if (StatusRegister & RX_FINISHED_MASK){
+		ack |= RX_FINISHED_MASK;
+		// check in no error in RX
+		if (StatusRegister & RX_NO_ERROR_MASK){
+			RxOk = 1;
+			ack |= RX_NO_ERROR_MASK;
+		}
+	}
+	// clear IRQ flags on DW
+	Uint32TOuint8 ( ack, TxBuffer );
+	DWM_WriteSPI(DWM1000_REG_SYS_STATUS, TxBuffer, 4);
 }
 /* USER CODE END 4 */
 

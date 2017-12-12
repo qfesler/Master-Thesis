@@ -101,6 +101,12 @@
 
 /* USER CODE BEGIN Private defines */
 
+#define ANTENNA_DELAY 					0x8066 // /!\ From decarduino 
+
+#define TX_OK_MASK							0x00000080 // TX OK
+#define RX_FINISHED_MASK				0x00002000 // RX FINISHED
+#define RX_NO_ERROR_MASK				0x00004000 // RX NO ERROR
+
 // register map
 #define DWM1000_REG_DEV_ID      0x00
 #define DWM1000_REG_EUI         0x01
