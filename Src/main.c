@@ -43,6 +43,8 @@
 /* USER CODE BEGIN Includes */
 #include "EventRecorder.h"              // Keil.ARM Compiler::Compiler:Event Recorder
 #include "stdio.h"
+
+#include <inttypes.h>
 /* USER CODE END Includes */
 
 /* Private variables ---------------------------------------------------------*/
@@ -52,6 +54,25 @@ SPI_HandleTypeDef hspi1;
 /* Private variables ---------------------------------------------------------*/
 uint8_t RxData[128];
 uint8_t TxData[128];
+
+uint64_t t1, t2, t3, t4, t5, t6;
+uint8_t t2_8[5];
+uint8_t t3_8[5];
+uint8_t t6_8[5];
+
+uint64_t tof;
+
+uint64_t distance;
+
+#define AIR_SPEED_OF_LIGHT 229702547.0
+#define DW1000_TIMEBASE 15.65E-12
+#define COEFF AIR_SPEED_OF_LIGHT*DW1000_TIMEBASE
+
+// Boolean variables
+int TxOk = 0;
+int RxOk = 0;
+
+int state;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -61,19 +82,23 @@ static void MX_SPI1_Init(void);
 
 /* USER CODE BEGIN PFP */
 /* Private function prototypes -----------------------------------------------*/
+void DWM_SendData(uint8_t* data, uint8_t len);
+void DWM_ReceiveData(uint8_t* buffer);
 void DWM_Init(void);
 void DWM_reset(void);
+uint64_t DWM_GetTimeStamp(uint8_t reg);
+void DWM_Enable_Rx(void);
 uint32_t uint8TOuint32(uint8_t *data);
 void DWM_ReadSPI(uint8_t adress, uint8_t *data, uint16_t len);
 void Error_Fct(void);
 void Uint32TOuint8 ( uint32_t from, uint8_t *to );
+uint64_t uint8TOuint64(uint8_t *data);
 void DWM_WriteSPI(uint8_t address, uint8_t *data, uint16_t len);
 /* USER CODE END PFP */
 
 /* USER CODE BEGIN 0 */
-// Boolean variables
-int TxOk = 0;
-int RxOk = 0;
+
+
 
 /* USER CODE END 0 */
 
@@ -109,7 +134,7 @@ int main(void)
 	/* initialisation of the DecaWave */
 	HAL_Delay(10); //time for the DW to go from Wakeup to init and then IDLE
 	DWM_Init();
-	
+	state = STATE_INIT;
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -119,7 +144,83 @@ int main(void)
   /* USER CODE END WHILE */
 
   /* USER CODE BEGIN 3 */
-
+		switch (state){
+			case STATE_INIT : 
+					// can set the DW in IDLE to save battery and re-enable after it (16µs delay)
+				HAL_Delay(1000); // 1sec between 2 measures
+					
+					//Send first data
+				TxData[0] = TX_STANDARD_MESSAGE;
+				DWM_SendData(TxData, 1);
+					//Change state to wait TX OK (polling)
+				state = STATE_WAIT_FIRST_SEND;
+			break;
+			
+			case STATE_WAIT_FIRST_SEND:
+				if (TxOk){
+					//get tx time (T1)
+					t1 = DWM_GetTimeStamp(DWM1000_REG_TX_TIME);
+					state = STATE_WAIT_RESPONSE;
+					TxOk = 0;
+					DWM_Enable_Rx();
+				}
+			break;
+				
+			case STATE_WAIT_RESPONSE:
+				if (RxOk){
+					// Read Rx buffer
+					DWM_ReceiveData(RxData);
+					
+					// Check RxFrame
+					if (RxData[0] == RX_STANDARD_MESSAGE){
+						//get rx time (t4)
+						t4 = DWM_GetTimeStamp(DWM1000_REG_RX_TIME);
+						
+						//Send second time
+						DWM_SendData(TxData, 1);
+						state = STATE_WAIT_SECOND_SEND;
+					}
+					RxOk = 0;
+				}
+			break;
+				
+			case STATE_WAIT_SECOND_SEND:
+					if (TxOk){
+					//get tx time (T5)
+					t5 = DWM_GetTimeStamp(DWM1000_REG_TX_TIME);
+					state = STATE_GET_TIMES;
+					TxOk = 0;
+					DWM_Enable_Rx();
+				}
+			break;
+			
+			case STATE_GET_TIMES:
+				if (RxOk){
+					//Read Rx Buffer
+					DWM_ReceiveData(RxData);
+					
+					for (int i=0;i<5;i++){
+						t2_8[i] = RxData[i];
+						t3_8[i] = RxData[i+5];
+						t6_8[i] = RxData[i+10];
+					}
+					t2 = uint8TOuint64(t2_8);
+					t3 = uint8TOuint64(t3_8);
+					t6 = uint8TOuint64(t6_8);
+					state = STATE_COMPUTE_DISTANCE;
+					RxOk = 0;
+				}
+			break;
+				
+			case STATE_COMPUTE_DISTANCE :
+				tof = (2*t4 - t1 - 2*t3 + t2 + t6 - t5)/4;
+				
+			distance = tof*COEFF;
+			printf("%"PRIu64"\n", distance);
+				
+				state = STATE_INIT;
+			break;
+		}
   }
   /* USER CODE END 3 */
 
@@ -310,6 +411,49 @@ static void MX_GPIO_Init(void)
 
 /* USER CODE BEGIN 4 */
 
+void DWM_SendData(uint8_t* data, uint8_t len){ // data limited to 125 byte long
+	
+	DWM_WriteSPI(DWM1000_REG_TX_BUFFER, data, len);
+	
+	// maj frame length
+	uint8_t flen = len+2; //FCS 2byte long
+	DWM_WriteSPI(DWM1000_REG_TX_FCTRL, &flen ,1);
+	
+	// START SENDING
+	uint8_t TxStartBit = 0x02;
+	DWM_WriteSPI(DWM1000_REG_SYS_CTRL, &TxStartBit, 1);
+}
+
+void DWM_ReceiveData(uint8_t* buffer){
+	// Get frame length
+	uint8_t flen;
+	DWM_ReadSPI(DWM1000_REG_RX_FINFO, &flen, 1);
+	flen = flen-2; // FCS 2 Byte long
+	
+	//reading data
+	DWM_ReadSPI(DWM1000_REG_RX_BUFFER, buffer, flen);
+}
+
+
+uint64_t DWM_GetTimeStamp(uint8_t reg){
+	uint8_t time8[5];
+	uint64_t time = 0;
+	DWM_ReadSPI(reg, time8, 5);
+	time = time8[4];
+	time = time << 32; // doesnt work otherwise : says shift too large
+	time = time |(time8[3] << 24) | (time8[2] << 16) | (time8[1] << 8) | time8[0];
+	return time;
+}
+
+
+uint64_t uint8TOuint64(uint8_t *data){
+	uint64_t tmp = 0;
+	tmp = data[4];
+	tmp = tmp << 32; // doesnt work otherwise : says shift too large
+	tmp = tmp |(data[3] << 24) | (data[2] << 16) | (data[1] << 8) | data[0];
+	return tmp;
+	
+}
 
 void DWM_reset(void){
 	/* reset : 	- set SYSCLK to 01
@@ -396,6 +540,11 @@ void DWM_Init(void){
   SPITxBuffer32 = SPIRxBuffer32 | 0x20000000;
   Uint32TOuint8(SPITxBuffer32, SPITxBuffer8);
   DWM_WriteSPI(DWM1000_REG_SYS_CFG, SPITxBuffer8, 4);
+	
+	// enable receiver
+	SPITxBuffer32 = 0x00000100;
+	Uint32TOuint8(SPITxBuffer32, SPITxBuffer8);
+	DWM_WriteSPI(DWM1000_REG_SYS_CTRL, SPITxBuffer8, 4);
 
   // setup of the irq : MASK 0x00000080 TX OK
                       //MASK 0x00002000 RX FINISHED
@@ -444,6 +593,13 @@ void DWM_ReadSPI(uint8_t adress, uint8_t *data, uint16_t len){
 
 uint32_t uint8TOuint32(uint8_t *data){
 	return 0 | (data[3] << 24) | (data[2] << 16) | (data[1] << 8) | data[0];
+}
+
+void DWM_Enable_Rx(void){
+	uint8_t TxBuf8[4];
+	uint32_t TxBuf32 = 0x00000100;
+	Uint32TOuint8(TxBuf32, TxBuf8);
+	DWM_WriteSPI(DWM1000_REG_SYS_CTRL, TxBuf8, 4);
 }
 
 void Uint32TOuint8 ( uint32_t from, uint8_t *to ) {
