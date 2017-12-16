@@ -101,7 +101,9 @@
 
 /* USER CODE BEGIN Private defines */
 
-#define TX_STANDARD_MESSAGE			0xA5
+#define ADRESS_AND_PAN					0x000000FF
+
+#define TX_STANDARD_MESSAGE			1
 #define RX_STANDARD_MESSAGE			0x5A
 
 #define ANTENNA_DELAY 					0x8066 // /!\ From decarduino 
@@ -158,6 +160,10 @@
 #define DWM1000_REG_LDE_CTRL    0x2E
 #define DWM1000_REG_DIG_DIAG    0x2F
 #define DWM1000_REG_PMSC        0x36
+
+#define DWM1000_SUB_PMSC1				0x04
+
+
 
 /* USER CODE END Private defines */
 

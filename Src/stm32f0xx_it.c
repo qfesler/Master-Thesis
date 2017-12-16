@@ -85,12 +85,11 @@ void EXTI0_1_IRQHandler(void)
 
 /**
 * @brief This function handles EXTI line 2 and 3 interrupts.
-* Interrupts from the DWM1000
 */
 void EXTI2_3_IRQHandler(void)
 {
   /* USER CODE BEGIN EXTI2_3_IRQn 0 */
-	
+	HAL_GPIO_WritePin(GPIOC, LD4_Pin, GPIO_PIN_SET);
   /* USER CODE END EXTI2_3_IRQn 0 */
   HAL_GPIO_EXTI_IRQHandler(GPIO_PIN_3);
   /* USER CODE BEGIN EXTI2_3_IRQn 1 */

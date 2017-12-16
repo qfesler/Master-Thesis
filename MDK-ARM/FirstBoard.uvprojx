@@ -336,7 +336,7 @@
               <MiscControls>--C99</MiscControls>
               <Define>USE_HAL_DRIVER,STM32F072xB</Define>
               <Undefine></Undefine>
-              <IncludePath>../Inc;        ../Drivers/STM32F0xx_HAL_Driver/Inc;        ../Drivers/STM32F0xx_HAL_Driver/Inc/Legacy;        ../Drivers/CMSIS/Device/ST/STM32F0xx/Include;        ../Drivers/CMSIS/Include</IncludePath>
+              <IncludePath>../Inc;              ../Drivers/STM32F0xx_HAL_Driver/Inc;              ../Drivers/STM32F0xx_HAL_Driver/Inc/Legacy;              ../Drivers/CMSIS/Device/ST/STM32F0xx/Include;              ../Drivers/CMSIS/Include</IncludePath>
             </VariousControls>
           </Cads>
           <Aads>
@@ -499,6 +499,16 @@
               <FileName>stm32f0xx_hal_msp.c</FileName>
               <FileType>1</FileType>
               <FilePath>../Src/stm32f0xx_hal_msp.c</FilePath>
+            </File>
+            <File>
+              <FileName>dwm1000.h</FileName>
+              <FileType>5</FileType>
+              <FilePath>..\Inc\dwm1000.h</FilePath>
+            </File>
+            <File>
+              <FileName>dwm1000.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\Src\dwm1000.c</FilePath>
             </File>
           </Files>
         </Group>

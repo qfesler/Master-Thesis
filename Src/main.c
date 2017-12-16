@@ -39,6 +39,7 @@
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
 #include "stm32f0xx_hal.h"
+#include "dwm1000.h"
 
 /* USER CODE BEGIN Includes */
 #include "EventRecorder.h"              // Keil.ARM Compiler::Compiler:Event Recorder
@@ -83,6 +84,9 @@ static void MX_SPI1_Init(void);
 /* USER CODE BEGIN PFP */
 /* Private function prototypes -----------------------------------------------*/
 void DWM_SendData(uint8_t* data, uint8_t len);
+void DWM_WriteSpiUint32(uint8_t address, uint32_t ui32t);
+void DWM_Disable_Rx(void);
+uint32_t DWM_ReadSpiUint32(uint8_t address);
 void DWM_ReceiveData(uint8_t* buffer);
 void DWM_Init(void);
 void DWM_reset(void);
@@ -90,10 +94,12 @@ uint64_t DWM_GetTimeStamp(uint8_t reg);
 void DWM_Enable_Rx(void);
 uint32_t uint8TOuint32(uint8_t *data);
 void DWM_ReadSPI(uint8_t adress, uint8_t *data, uint16_t len);
+
 void Error_Fct(void);
 void Uint32TOuint8 ( uint32_t from, uint8_t *to );
 uint64_t uint8TOuint64(uint8_t *data);
 void DWM_WriteSPI(uint8_t address, uint8_t *data, uint16_t len);
+
 /* USER CODE END PFP */
 
 /* USER CODE BEGIN 0 */
@@ -135,6 +141,9 @@ int main(void)
 	HAL_Delay(10); //time for the DW to go from Wakeup to init and then IDLE
 	DWM_Init();
 	state = STATE_INIT;
+	
+	DWM_WriteSpiUint32(DWM1000_REG_PANADR, ADRESS_AND_PAN);
+	
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -144,32 +153,59 @@ int main(void)
   /* USER CODE END WHILE */
 
   /* USER CODE BEGIN 3 */
+		
 		switch (state){
 			case STATE_INIT : 
+				DWM_Disable_Rx();
 					// can set the DW in IDLE to save battery and re-enable after it (16µs delay)
 				HAL_Delay(1000); // 1sec between 2 measures
 					
 					//Send first data
 				TxData[0] = TX_STANDARD_MESSAGE;
-				DWM_SendData(TxData, 1);
+			TxData[1] = TX_STANDARD_MESSAGE;
+			TxData[2] = TX_STANDARD_MESSAGE;
+			TxData[3] = TX_STANDARD_MESSAGE;
+			printf("sending data\n");
+				DWM_SendData(TxData, 4);
 					//Change state to wait TX OK (polling)
+				printf("Wait TX \n");
 				state = STATE_WAIT_FIRST_SEND;
+				HAL_GPIO_WritePin(GPIOC, LD6_Pin, GPIO_PIN_SET);
+			
+				HAL_Delay(100);
+			
+			
+	/*	EF	
+	uint8_t RxBuffer[4];
+	//uint8_t TxBuffer[4];
+	uint32_t StatusRegister;
+	//uint32_t ack = 0;
+	// Getting status Register
+	DWM_ReadSPI(DWM1000_REG_DX_TIME, RxBuffer, 4);
+	StatusRegister = uint8TOuint32(RxBuffer);
+	
+	printf("%" PRIu32 "\n", StatusRegister);
+		*/		
 			break;
 			
 			case STATE_WAIT_FIRST_SEND:
+
 				if (TxOk){
 					//get tx time (T1)
 					t1 = DWM_GetTimeStamp(DWM1000_REG_TX_TIME);
 					state = STATE_WAIT_RESPONSE;
 					TxOk = 0;
 					DWM_Enable_Rx();
+					printf("Tx OK \n");
 				}
+				
 			break;
 				
 			case STATE_WAIT_RESPONSE:
 				if (RxOk){
 					// Read Rx buffer
 					DWM_ReceiveData(RxData);
+					printf("RX sth");
 					
 					// Check RxFrame
 					if (RxData[0] == RX_STANDARD_MESSAGE){
@@ -285,7 +321,7 @@ static void MX_SPI1_Init(void)
   hspi1.Init.CLKPolarity = SPI_POLARITY_LOW;
   hspi1.Init.CLKPhase = SPI_PHASE_1EDGE;
   hspi1.Init.NSS = SPI_NSS_SOFT;
-  hspi1.Init.BaudRatePrescaler = SPI_BAUDRATEPRESCALER_4;
+  hspi1.Init.BaudRatePrescaler = SPI_BAUDRATEPRESCALER_32;
   hspi1.Init.FirstBit = SPI_FIRSTBIT_MSB;
   hspi1.Init.TIMode = SPI_TIMODE_DISABLE;
   hspi1.Init.CRCCalculation = SPI_CRCCALCULATION_DISABLE;
@@ -389,8 +425,8 @@ static void MX_GPIO_Init(void)
 
   /*Configure GPIO pin : SPI_IRQ_Pin */
   GPIO_InitStruct.Pin = SPI_IRQ_Pin;
-  GPIO_InitStruct.Mode = GPIO_MODE_IT_FALLING;
-  GPIO_InitStruct.Pull = GPIO_PULLUP;
+  GPIO_InitStruct.Mode = GPIO_MODE_IT_RISING;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
   HAL_GPIO_Init(SPI_IRQ_GPIO_Port, &GPIO_InitStruct);
 
   /*Configure GPIO pin : SPI1_CS_Pin */
@@ -413,15 +449,26 @@ static void MX_GPIO_Init(void)
 
 void DWM_SendData(uint8_t* data, uint8_t len){ // data limited to 125 byte long
 	
+	uint32_t ui32t;
+	
+	
+	/* ** ERIC ** */
+	ui32t = 0x40; // FCS is 2-bytes long
+	DWM_WriteSpiUint32(DWM1000_REG_SYS_CTRL, ui32t);
+	/* ** ERIC ** */
 	DWM_WriteSPI(DWM1000_REG_TX_BUFFER, data, len);
 	
 	// maj frame length
-	uint8_t flen = len+2; //FCS 2byte long
-	DWM_WriteSPI(DWM1000_REG_TX_FCTRL, &flen ,1);
+	ui32t = DWM_ReadSpiUint32(DWM1000_REG_TX_FCTRL);
+	
+	ui32t = (ui32t & 0xFFFFE000) | (len+2); // FCS is 2-bytes long
+	DWM_WriteSpiUint32(DWM1000_REG_TX_FCTRL, ui32t);
+	//uint8_t flen = len+2; //FCS 2byte long
+	//DWM_WriteSPI(DWM1000_REG_TX_FCTRL, &flen ,1);
 	
 	// START SENDING
-	uint8_t TxStartBit = 0x02;
-	DWM_WriteSPI(DWM1000_REG_SYS_CTRL, &TxStartBit, 1);
+	uint32_t TxStartBit = 2;
+	DWM_WriteSpiUint32(DWM1000_REG_SYS_CTRL, TxStartBit);
 }
 
 void DWM_ReceiveData(uint8_t* buffer){
@@ -467,16 +514,19 @@ void DWM_reset(void){
 	// Getting PMSC_CTRL0 register
 	DWM_ReadSPI(DWM1000_REG_PMSC, RxUint8,4);
 	uint32_t RxUint32 = uint8TOuint32(RxUint8);
+	HAL_Delay(1);
 
 	// Set SYSCLKS bits to 01
 	RxUint32 = ( RxUint32 & 0xFFFFFFFC ) | 1;
 	Uint32TOuint8 ( RxUint32, TxUint8 );
 	DWM_WriteSPI(DWM1000_REG_PMSC, TxUint8, 4);
+	HAL_Delay(1);
 
 	// Clear SOFTRESET bits
 	RxUint32 &= 0x0FFFFFFF;
 	Uint32TOuint8 ( RxUint32, TxUint8 );
 	DWM_WriteSPI(DWM1000_REG_PMSC, TxUint8, 4);
+	HAL_Delay(1);
 
 	// Set SOFTRESET bits
 	RxUint32 |= 0xF0000000;
@@ -537,9 +587,54 @@ void DWM_Init(void){
   // RXAUTR: Receiver auto-re-enable
   DWM_ReadSPI(DWM1000_REG_SYS_CFG, SPIRxBuffer8, 4);
   SPIRxBuffer32 = uint8TOuint32(SPIRxBuffer8);
-  SPITxBuffer32 = SPIRxBuffer32 | 0x20000000;
+  //SPITxBuffer32 = SPIRxBuffer32 | 0x20000000;
+	SPITxBuffer32 = 0x20001200;
   Uint32TOuint8(SPITxBuffer32, SPITxBuffer8);
   DWM_WriteSPI(DWM1000_REG_SYS_CFG, SPITxBuffer8, 4);
+	
+
+	
+	// CHAN_CTRL
+	DWM_ReadSPI(DWM1000_REG_CHAN_CTRL, SPIRxBuffer8, 4);
+  SPIRxBuffer32 = uint8TOuint32(SPIRxBuffer8);
+	SPIRxBuffer32 &= 0xFFC5FFFF;
+	SPIRxBuffer32 |= 0x00040000;
+	Uint32TOuint8(SPITxBuffer32, SPITxBuffer8);
+  DWM_WriteSPI(DWM1000_REG_CHAN_CTRL, SPITxBuffer8, 4);
+	
+	// F_CTRL
+	uint8_t Rx5Buf[5];
+	DWM_ReadSPI(DWM1000_REG_TX_FCTRL, Rx5Buf, 5);
+		
+	for(int i=0;i<5;i++){
+		printf("%"PRIx8"\n", Rx5Buf[4-i]);
+	}
+	
+	printf("He \n");
+	uint8_t TxUint8[5];
+	TxUint8[0] = DWM1000_REG_TX_FCTRL | 0x80;
+	TxUint8[1] = 0x0C;
+	TxUint8[2] = 0x80;
+	TxUint8[3] = 0x15;
+	TxUint8[4] = 0x00;
+	//TxUint8[5] = 0x00;
+	HAL_GPIO_WritePin(SPI1_CS_GPIO_Port, SPI1_CS_Pin, GPIO_PIN_RESET);
+	HAL_SPI_Transmit(&hspi1, TxUint8, 5, HAL_MAX_DELAY);
+	HAL_GPIO_WritePin(SPI1_CS_GPIO_Port, SPI1_CS_Pin, GPIO_PIN_SET);
+//	DWM_ReadSPI(DWM1000_REG_TX_FCTRL, SPIRxBuffer8, 4);
+//  SPIRxBuffer32 = uint8TOuint32(SPIRxBuffer8);
+//	//SPIRxBuffer32 &= 0xFFC083FF;
+//	SPIRxBuffer32 &= 0xFFFF00FF;
+//	//SPIRxBuffer32 |= 0x00292000;
+//	SPIRxBuffer32 |= 0x00008000;
+//	Uint32TOuint8(SPITxBuffer32, SPITxBuffer8);
+//  DWM_WriteSPI(DWM1000_REG_TX_FCTRL, SPITxBuffer8, 4);
+		DWM_ReadSPI(DWM1000_REG_TX_FCTRL, Rx5Buf, 5);
+		
+	for(int i=0;i<5;i++){
+		printf("%"PRIx8"\n", Rx5Buf[4-i]);
+	}
+	
 	
 	// enable receiver
 	SPITxBuffer32 = 0x00000100;
@@ -566,6 +661,37 @@ void DWM_Init(void){
 	DWM_WriteSPI(DWM1000_REG_TX_ANTD, delayuint8, 2);
 
 	// /!\ ....
+	
+	// ERIC - Check SYS_STATUS
+		// clear IRQ flags on DW
+	uint32_t ack = 0 | TX_OK_MASK;	
+	Uint32TOuint8 ( ack, SPITxBuffer8 );
+	DWM_WriteSPI(DWM1000_REG_SYS_STATUS, SPITxBuffer8, 4);
+	HAL_Delay(100);
+	/*
+	DWM_ReadSPI(DWM1000_REG_SYS_STATUS, SPIRxBuffer8, 4);
+  SPIRxBuffer32 = uint8TOuint32(SPIRxBuffer8);
+  SPITxBuffer32 = SPIRxBuffer32 | TX_OK_MASK; // TX OK
+  Uint32TOuint8(SPITxBuffer32, SPITxBuffer8);
+  DWM_WriteSPI(DWM1000_REG_SYS_STATUS, SPITxBuffer8, 4);
+
+  HAL_Delay(1000);
+	*/
+	
+	printf("Check SYS_STATUS, last bit should be at 1\n");
+	DWM_ReadSPI(DWM1000_REG_SYS_STATUS, Rx5Buf, 5);
+		
+	for(int i=0;i<5;i++){
+		printf("%"PRIx8"\n", Rx5Buf[4-i]);
+	}
+	
+	printf("Check SYS_MASK, bit 7 should be at 1\n");
+	DWM_ReadSPI(DWM1000_REG_SYS_MASK, SPIRxBuffer8, 4);
+  SPIRxBuffer32 = uint8TOuint32(SPIRxBuffer8);
+	printf("%"PRIx32"\n", SPIRxBuffer32);
+	
+
+	
 }
 
 void DWM_WriteSPI(uint8_t address, uint8_t *data, uint16_t len){
@@ -573,8 +699,24 @@ void DWM_WriteSPI(uint8_t address, uint8_t *data, uint16_t len){
 	HAL_GPIO_WritePin(SPI1_CS_GPIO_Port, SPI1_CS_Pin, GPIO_PIN_RESET);
 	HAL_SPI_Transmit(&hspi1, &writeAdr, 1, HAL_MAX_DELAY);
 	HAL_SPI_Transmit(&hspi1, data, len, HAL_MAX_DELAY);
-	HAL_Delay(100);
+	//HAL_Delay(100);
 	HAL_GPIO_WritePin(SPI1_CS_GPIO_Port, SPI1_CS_Pin, GPIO_PIN_SET);
+}
+
+void DWM_WriteSpiUint32(uint8_t address, uint32_t ui32t) {
+
+	uint8_t buf[4];
+
+	Uint32TOuint8(ui32t, buf);
+	DWM_WriteSPI(address, buf, 4);
+}
+
+uint32_t DWM_ReadSpiUint32(uint8_t address) {
+
+	uint8_t buf[4];
+
+	DWM_ReadSPI(address, buf, 4);
+	return uint8TOuint32(buf);
 }
 
 void DWM_ReadSPI(uint8_t adress, uint8_t *data, uint16_t len){
@@ -587,9 +729,11 @@ void DWM_ReadSPI(uint8_t adress, uint8_t *data, uint16_t len){
 	HAL_GPIO_WritePin(SPI1_CS_GPIO_Port, SPI1_CS_Pin, GPIO_PIN_RESET);
 	HAL_SPI_Transmit(&hspi1, &readAdr, 1, HAL_MAX_DELAY);
 	HAL_SPI_TransmitReceive(&hspi1, DUMMYBYTE, data, len, HAL_MAX_DELAY);
-	HAL_Delay(100);
+	//HAL_Delay(100);
 	HAL_GPIO_WritePin(SPI1_CS_GPIO_Port, SPI1_CS_Pin, GPIO_PIN_SET);
 }
+
+
 
 uint32_t uint8TOuint32(uint8_t *data){
 	return 0 | (data[3] << 24) | (data[2] << 16) | (data[1] << 8) | data[0];
@@ -601,6 +745,15 @@ void DWM_Enable_Rx(void){
 	Uint32TOuint8(TxBuf32, TxBuf8);
 	DWM_WriteSPI(DWM1000_REG_SYS_CTRL, TxBuf8, 4);
 }
+
+void DWM_Disable_Rx(void){
+	uint8_t TxBuf8[4];
+	uint32_t TxBuf32 = 0x00000000;
+	Uint32TOuint8(TxBuf32, TxBuf8);
+	DWM_WriteSPI(DWM1000_REG_SYS_CTRL, TxBuf8, 4);
+}
+
+
 
 void Uint32TOuint8 ( uint32_t from, uint8_t *to ) {
 	to[3] = (from & 0xFF000000) >> 24;
@@ -623,10 +776,18 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin){
 	uint8_t TxBuffer[4];
 	uint32_t StatusRegister;
 	uint32_t ack = 0;
+	
+	
 	// Getting status Register
 	DWM_ReadSPI(DWM1000_REG_SYS_STATUS, RxBuffer, 4);
 	StatusRegister = uint8TOuint32(RxBuffer);
-	
+	if (StatusRegister == 0xFFFFFFFF) {
+		// Read again
+		printf("DWM was in sleep mode\n");
+		DWM_ReadSPI(DWM1000_REG_SYS_STATUS, RxBuffer, 4);
+		StatusRegister = uint8TOuint32(RxBuffer);
+	}
+	//printf("%"PRIx32"\n", StatusRegister);
 	// check if Tx OK
 	if (StatusRegister & TX_OK_MASK){
 		TxOk = 1;

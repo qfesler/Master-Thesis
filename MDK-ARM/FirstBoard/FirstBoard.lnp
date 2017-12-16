@@ -20,6 +20,7 @@
 "firstboard\main.o"
 "firstboard\stm32f0xx_it.o"
 "firstboard\stm32f0xx_hal_msp.o"
+"firstboard\dwm1000.o"
 "firstboard\eventrecorder.o"
 "firstboard\retarget_io.o"
 --library_type=microlib --strict --scatter "FirstBoard\FirstBoard.sct"
