@@ -39,12 +39,12 @@
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
 #include "stm32f0xx_hal.h"
-#include "dwm1000.h"
 
 /* USER CODE BEGIN Includes */
 #include "EventRecorder.h"              // Keil.ARM Compiler::Compiler:Event Recorder
 #include "stdio.h"
-
+#include "dwm1000.h"
+#include <string.h>
 #include <inttypes.h>
 /* USER CODE END Includes */
 
@@ -136,6 +136,8 @@ int main(void)
   MX_SPI1_Init();
 
   /* USER CODE BEGIN 2 */
+	_deviceHandle = &hspi1;					// Assign SPI handle
+	
 	printf("Hello World \n ");
 	/* initialisation of the DecaWave */
 	HAL_Delay(10); //time for the DW to go from Wakeup to init and then IDLE
@@ -153,7 +155,7 @@ int main(void)
   /* USER CODE END WHILE */
 
   /* USER CODE BEGIN 3 */
-		
+#ifdef MASTER_BOARD
 		switch (state){
 			case STATE_INIT : 
 				DWM_Disable_Rx();
@@ -257,7 +259,12 @@ int main(void)
 				state = STATE_INIT;
 			break;
 		}
+#endif
+		
+#ifdef SLAVE_BOARD
+#endif
   }
+
   /* USER CODE END 3 */
 
 }
@@ -289,10 +296,10 @@ void SystemClock_Config(void)
   RCC_ClkInitStruct.ClockType = RCC_CLOCKTYPE_HCLK|RCC_CLOCKTYPE_SYSCLK
                               |RCC_CLOCKTYPE_PCLK1;
   RCC_ClkInitStruct.SYSCLKSource = RCC_SYSCLKSOURCE_PLLCLK;
-  RCC_ClkInitStruct.AHBCLKDivider = RCC_SYSCLK_DIV1;
+  RCC_ClkInitStruct.AHBCLKDivider = RCC_SYSCLK_DIV2;
   RCC_ClkInitStruct.APB1CLKDivider = RCC_HCLK_DIV1;
 
-  if (HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_1) != HAL_OK)
+  if (HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_0) != HAL_OK)
   {
     _Error_Handler(__FILE__, __LINE__);
   }
@@ -321,7 +328,7 @@ static void MX_SPI1_Init(void)
   hspi1.Init.CLKPolarity = SPI_POLARITY_LOW;
   hspi1.Init.CLKPhase = SPI_PHASE_1EDGE;
   hspi1.Init.NSS = SPI_NSS_SOFT;
-  hspi1.Init.BaudRatePrescaler = SPI_BAUDRATEPRESCALER_32;
+  hspi1.Init.BaudRatePrescaler = SPI_BAUDRATEPRESCALER_8;
   hspi1.Init.FirstBit = SPI_FIRSTBIT_MSB;
   hspi1.Init.TIMode = SPI_TIMODE_DISABLE;
   hspi1.Init.CRCCalculation = SPI_CRCCALCULATION_DISABLE;
@@ -452,9 +459,8 @@ void DWM_SendData(uint8_t* data, uint8_t len){ // data limited to 125 byte long
 	uint32_t ui32t;
 	
 	
-	/* ** ERIC ** */
-	ui32t = 0x40; // FCS is 2-bytes long
-	DWM_WriteSpiUint32(DWM1000_REG_SYS_CTRL, ui32t);
+	/* ** ERIC **/
+	idle();
 	/* ** ERIC ** */
 	DWM_WriteSPI(DWM1000_REG_TX_BUFFER, data, len);
 	
@@ -462,7 +468,8 @@ void DWM_SendData(uint8_t* data, uint8_t len){ // data limited to 125 byte long
 	ui32t = DWM_ReadSpiUint32(DWM1000_REG_TX_FCTRL);
 	
 	ui32t = (ui32t & 0xFFFFE000) | (len+2); // FCS is 2-bytes long
-	DWM_WriteSpiUint32(DWM1000_REG_TX_FCTRL, ui32t);
+	printf("fx:%"PRIx32"\n", ui32t);
+	DWM_WriteSPI_ext(DWM1000_REG_TX_FCTRL, NO_SUB, (uint8_t*)&ui32t, 4);
 	//uint8_t flen = len+2; //FCS 2byte long
 	//DWM_WriteSPI(DWM1000_REG_TX_FCTRL, &flen ,1);
 	

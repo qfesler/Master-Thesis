@@ -29,7 +29,7 @@
     <heapSize>0x200</heapSize>
     <stackSize>0x400</stackSize>
     
-    	<cpuclock>48</cpuclock>
+    	<cpuclock>24</cpuclock>
     	<board>STM32F072B-DISCO</board>
 			
     <usedDebug>true</usedDebug>
