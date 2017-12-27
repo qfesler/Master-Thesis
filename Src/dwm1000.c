@@ -31,25 +31,28 @@ void DWM_Init(void){
 	
 	if (deviceID != 0xDECA0130){
 		printf("Wrong DW ID \n");
+		printf("%" PRIx32 "\n", deviceID);
 		// infinite loop
 		while (1){
 			HAL_GPIO_TogglePin(GPIOC, LD3_Pin);
 			HAL_Delay(100);
 		}
 	}
-  // RXAUTR: Receiver auto-re-enable
+ // RXAUTR: Receiver auto-re-enable
 	uint8_t sysCfg[SYS_CFG_LEN];
   DWM_ReadSPI_ext(SYS_CFG, NO_SUB, sysCfg, SYS_CFG_LEN);
 	sysCfg[3] = 0x20;
 	sysCfg[1] = 0x12;
+	sysCfg[0] = 0x00;
+	setBit(sysCfg,SYS_CFG_LEN,22,1);//setting 110kbps
   DWM_WriteSPI_ext(SYS_CFG, NO_SUB, sysCfg, SYS_CFG_LEN);
 	
-	// CHAN_CTRL
+	/*// CHAN_CTRL
 	uint8_t chanCtrl[CHAN_CTRL_LEN];
 	DWM_ReadSPI_ext(CHAN_CTRL, NO_SUB, chanCtrl, CHAN_CTRL_LEN);
 	chanCtrl[2] &= 0xC5;
 	chanCtrl[2] &= 0x04;
-  DWM_WriteSPI_ext(CHAN_CTRL, NO_SUB, chanCtrl, CHAN_CTRL_LEN);
+  DWM_WriteSPI_ext(CHAN_CTRL, NO_SUB, chanCtrl, CHAN_CTRL_LEN);*/
 	
 	// F_CTRL
 	uint8_t fctrl[TX_FCTRL_LEN];
@@ -152,7 +155,9 @@ void DWM_reset(void){
 }
 
 void DWM_Enable_Rx(void){
+	idle();
 	uint8_t TxBuf8[4];
+	memset(TxBuf8, 0, 4);
 	setBit(TxBuf8,4,8,1);
 	DWM_WriteSPI_ext(SYS_CTRL, NO_SUB, TxBuf8, 4);
 	_deviceMode = RX_MODE;
@@ -189,6 +194,8 @@ void setBit(uint8_t *data, uint16_t len, uint8_t bit, uint8_t val) {
 /* ------------------------------------- */
 void DWM_ReadSPI_ext(uint8_t address, uint16_t offset, uint8_t *data, uint16_t len) {
 	uint8_t header[3];
+	memset(header,0,3);
+	uint16_t i = 0;
 	uint8_t headerLen = 1;
 	uint8_t DUMMY_BYTE[len];
 	memset(DUMMY_BYTE, 0, len);
@@ -206,11 +213,18 @@ void DWM_ReadSPI_ext(uint8_t address, uint16_t offset, uint8_t *data, uint16_t l
 			headerLen += 2;
 		}		
 	}
-	
+	__disable_irq();
 	HAL_GPIO_WritePin(SPI1_CS_GPIO_Port, SPI1_CS_Pin, GPIO_PIN_RESET);
-	HAL_SPI_Transmit(_deviceHandle, header, headerLen, HAL_MAX_DELAY);
-	HAL_SPI_TransmitReceive(_deviceHandle, DUMMY_BYTE, data, len, HAL_MAX_DELAY);
+	// Hack write byte by byte to avoid hardfault on HAL_SPI_Transmit with non 2 bytes aligned data
+	for (i=0; i < headerLen; i++) {
+		HAL_SPI_Transmit(_deviceHandle, &header[i], 1, HAL_MAX_DELAY);
+	}
+	for (i=0; i < len; i++) {
+		HAL_SPI_TransmitReceive(_deviceHandle, &DUMMY_BYTE[i], &data[i], 1, HAL_MAX_DELAY);
+	}
+
 	HAL_GPIO_WritePin(SPI1_CS_GPIO_Port, SPI1_CS_Pin, GPIO_PIN_SET);
+	__enable_irq();
 }
 
 void DWM_WriteSPI_ext(uint8_t address, uint16_t offset, uint8_t *data, uint16_t len) {
@@ -231,7 +245,7 @@ void DWM_WriteSPI_ext(uint8_t address, uint16_t offset, uint8_t *data, uint16_t 
 			headerLen += 2;
 		}		
 	}
-	
+	__disable_irq();
 	HAL_GPIO_WritePin(SPI1_CS_GPIO_Port, SPI1_CS_Pin, GPIO_PIN_RESET);
 	// Hack write byte by byte to avoid hardfault on HAL_SPI_Transmit with non 2 bytes aligned data
 	for (i=0; i < headerLen; i++) {
@@ -242,6 +256,7 @@ void DWM_WriteSPI_ext(uint8_t address, uint16_t offset, uint8_t *data, uint16_t 
 	}
 
 	HAL_GPIO_WritePin(SPI1_CS_GPIO_Port, SPI1_CS_Pin, GPIO_PIN_SET);
+	__enable_irq();
 }
 
 
@@ -261,6 +276,8 @@ void DWM_SendData(uint8_t* data, uint8_t len){ // data limited to 125 byte long
 	// START SENDING
 	// Set bit TXSTRT to 1
 	setBit(_sysctrl, LEN_SYS_CTRL, TXSTRT_BIT, 1);
+	// Remove Force idle mode
+	setBit(_sysctrl, LEN_SYS_CTRL, TRXOFF_BIT, 0);
 	// Set the device in TX mode
 	_deviceMode = TX_MODE;
 	// Update the DWM1000 module
@@ -275,4 +292,6 @@ void DWM_ReceiveData(uint8_t* buffer){
 	
 	//reading data
 	DWM_ReadSPI_ext(RX_BUFFER, NO_SUB, buffer, flen);
+	for (int i =0; i< flen ; i++){
+	}
 }

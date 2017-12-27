@@ -66,15 +66,17 @@ uint8_t t6_8[5];
 
 uint64_t tof;
 
-uint64_t distance;
+double distance;
 
+/* bad define ... type conflict 
 #define AIR_SPEED_OF_LIGHT 229702547.0
 #define DW1000_TIMEBASE 15.65E-12
 #define COEFF AIR_SPEED_OF_LIGHT*DW1000_TIMEBASE
+*/
 
 // Boolean variables
-int TxOk = 0;
-int RxOk = 0;
+uint8_t TxOk = 0;
+uint8_t RxOk = 0;
 
 int state;
 /* USER CODE END PV */
@@ -128,7 +130,7 @@ int main(void)
 	HAL_Delay(10); //time for the DW to go from Wakeup to init and then IDLE
 	DWM_Init();
 	state = STATE_INIT;
-	/* USER CODE END 2 */
+  /* USER CODE END 2 */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
@@ -150,33 +152,38 @@ int main(void)
 				printf("Wait TX \n");
 				state = STATE_WAIT_FIRST_SEND;
 				HAL_GPIO_WritePin(GPIOC, LD6_Pin, GPIO_PIN_SET);
-				HAL_Delay(100);	
 			break;
 			
 			case STATE_WAIT_FIRST_SEND:
 				if (TxOk){
 					//get tx time (T1)
+					DWM_Enable_Rx();
 					DWM_ReadSPI_ext(TX_TIME, NO_SUB, t1_8, 5);
 					state = STATE_WAIT_RESPONSE;
 					TxOk = 0;
-					DWM_Enable_Rx();
 					printf("Tx OK \n");
+					HAL_GPIO_WritePin(GPIOC, LD5_Pin, GPIO_PIN_SET);
+					HAL_GPIO_WritePin(GPIOC, LD3_Pin, GPIO_PIN_SET);
+					HAL_GPIO_WritePin(GPIOC, LD4_Pin, GPIO_PIN_RESET);
 				}	
 			break;
 				
 			case STATE_WAIT_RESPONSE:
+				//printf("RX IS %" PRIx8 "\n", RxOk);
 				if (RxOk){
 					// Read Rx buffer
 					DWM_ReceiveData(RxData);
-					printf("RX sth");
+					printf("received \n");
 					// Check RxFrame
 					if (RxData[0] == SLAVE_STANDARD_MESSAGE){
 						//get rx time (t4)
 						DWM_ReadSPI_ext(RX_TIME, NO_SUB, t4_8, 5);
 						
 						//Send second time
+						HAL_Delay(10);
 						DWM_SendData(TxData, 1);
 						state = STATE_WAIT_SECOND_SEND;
+						printf("sending 2nd time \n");
 					}
 					RxOk = 0;
 				}
@@ -185,6 +192,7 @@ int main(void)
 			case STATE_WAIT_SECOND_SEND:
 					if (TxOk){
 					//get tx time (T5)
+						printf("TX 2 ok \n");
 					DWM_ReadSPI_ext(TX_TIME, NO_SUB, t5_8, 5);
 					state = STATE_GET_TIMES;
 					TxOk = 0;
@@ -203,6 +211,12 @@ int main(void)
 						t6_8[i] = RxData[i+10];
 					}
 					// Cast all times to uint64
+					t1 = 0;
+					t2 = 0;
+					t3 = 0;
+					t4 = 0;
+					t5 = 0;
+					t6= 0;
 					for (int i=0;i<5;i++){
 						t1 = (t1 << 8) | t1_8[4-i];
 						t2 = (t2 << 8) | t2_8[4-i];
@@ -211,15 +225,29 @@ int main(void)
 						t5 = (t5 << 8) | t5_8[4-i];
 						t6 = (t6 << 8) | t6_8[4-i];
 					}
+					printf("Got times \n ");
 					state = STATE_COMPUTE_DISTANCE;
 					RxOk = 0;
 				}
 			break;
 				
 			case STATE_COMPUTE_DISTANCE :
-				tof = (2*t4 - t1 - 2*t3 + t2 + t6 - t5)/4;				
-				distance = tof*COEFF;
-				printf("%"PRIu64"\n", distance);				
+				printf("computing times \n");
+				uint64_t TroundA = (t4-t1);
+				uint64_t TreplyB = (t3-t2);
+				uint64_t TroundB = (t6-t3);
+				uint64_t TreplyA = (t5-t4);
+				tof = (2*t4 - t1 - 2*t3 + t2 + t6 - t5)/4;
+				printf("tr1 = %"PRIu64"\n", TroundA);
+				printf("tp1 = %"PRIu64"\n", TreplyB);
+				printf("tr2 = %"PRIu64"\n", TroundB);
+				printf("tp2 = %"PRIu64"\n", TreplyA);
+			
+			printf("TOF : %" PRIu64"\n",tof);
+			double tofdouble = 1.0*tof;
+				double distancepicosec = tofdouble /(128*499.2);
+				distance = distancepicosec * 299792458 * 0.000001;
+				printf("Distance = %f\n", distance);				
 				state = STATE_INIT;
 			break;
 		}
@@ -229,8 +257,10 @@ int main(void)
 		switch (state){
 			case STATE_INIT :
 				DWM_Enable_Rx();
+				HAL_Delay(1);
 				state = STATE_FIRST_RECEIVE;
 				HAL_GPIO_WritePin(GPIOC, LD6_Pin, GPIO_PIN_SET);
+				printf("ready to receive \n");
 			break;
 			
 			case STATE_FIRST_RECEIVE :
@@ -240,23 +270,31 @@ int main(void)
 					// Check RxFrame
 					if (RxData[0] == MASTER_STANDARD_MESSAGE){
 						//get rx time (t2)
-						DWM_ReadSPI_ext(RX_TIME, NO_SUB, t2_8, 5);			
+						DWM_ReadSPI_ext(RX_TIME, NO_SUB, t2_8, 5);
+
+						//DWM_Disable_Rx();
 						//Send ack
+						HAL_Delay(10);	
 						TxData[0] = SLAVE_STANDARD_MESSAGE;
+						HAL_GPIO_WritePin(GPIOC, LD6_Pin, GPIO_PIN_RESET);
+						HAL_GPIO_WritePin(GPIOC, LD5_Pin, GPIO_PIN_SET);
 						DWM_SendData(TxData, 1);
-						state = STATE_RESPONSE;
+						state = STATE_RESPONSE;	
 					}
-					RxOk = 0;
+					RxOk = 0;	
 				}
 			break;
 			
 			case STATE_RESPONSE :
 				if (TxOk){
 					//get tx time (T3)
+					printf("TXBIT IS %" PRIx8 "\n",TxOk);
+					HAL_GPIO_WritePin(GPIOC, LD6_Pin, GPIO_PIN_SET);
 					DWM_ReadSPI_ext(TX_TIME, NO_SUB, t3_8, 5);
 					state = STATE_SECOND_RECEIVE;
 					TxOk = 0;
 					DWM_Enable_Rx();
+					printf("waiting second message");
 				}
 			break;
 			
@@ -264,15 +302,11 @@ int main(void)
 				if (RxOk){
 					// Read Rx buffer
 					DWM_ReceiveData(RxData);
-					
 					// Check RxFrame
 					if (RxData[0] == MASTER_STANDARD_MESSAGE){
 						//get rx time (t6)
 						DWM_ReadSPI_ext(RX_TIME, NO_SUB, t6_8, 5);
-						
-						//Send ack
-						TxData[0] = SLAVE_STANDARD_MESSAGE;
-						DWM_SendData(TxData, 1);
+						HAL_Delay(100);
 						state = STATE_SEND_TIMES;
 					}
 					RxOk = 0;
@@ -280,7 +314,8 @@ int main(void)
 			break;
 			
 			case STATE_SEND_TIMES :
-				
+				HAL_GPIO_WritePin(GPIOC, LD5_Pin, GPIO_PIN_RESET);
+				HAL_GPIO_WritePin(GPIOC, LD4_Pin, GPIO_PIN_SET);
 				for (int i=0; i<5; i++){
 					TxData[i] = t2_8[i];
 					TxData[i+5] = t3_8[i];
@@ -306,8 +341,7 @@ int main(void)
 
 /** System Clock Configuration
 */
-void SystemClock_Config(void)
-{
+void SystemClock_Config(void){
 
   RCC_OscInitTypeDef RCC_OscInitStruct;
   RCC_ClkInitTypeDef RCC_ClkInitStruct;
@@ -468,7 +502,7 @@ static void MX_GPIO_Init(void)
   /*Configure GPIO pin : SPI_IRQ_Pin */
   GPIO_InitStruct.Pin = SPI_IRQ_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_IT_RISING;
-  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  GPIO_InitStruct.Pull = GPIO_PULLDOWN;
   HAL_GPIO_Init(SPI_IRQ_GPIO_Port, &GPIO_InitStruct);
 
   /*Configure GPIO pin : SPI1_CS_Pin */
