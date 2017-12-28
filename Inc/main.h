@@ -100,19 +100,22 @@
 /* #define USE_FULL_ASSERT    1U */
 
 /* USER CODE BEGIN Private defines */
-//#define SLAVE_BOARD
-#define MASTER_BOARD
+#define SLAVE_BOARD
+//#define MASTER_BOARD
 
 #define ADRESS_AND_PAN					0x000000FF
 
-#define MASTER_STANDARD_MESSAGE			0xA5
-#define SLAVE_STANDARD_MESSAGE			0x5A
+#define MASTER_FIRST_MESSAGE				0x11
+#define MASTER_SECOND_MESSAGE				0x22
+#define SLAVE_STANDARD_MESSAGE			0xAA
 
-#define ANTENNA_DELAY 					0x8066 // /!\ From decarduino 
+#define ANTENNA_DELAY 					0x00 //0x4034//0x8066  /!\ From decarduino 
 
 #define TX_OK_MASK							0x00000080 // TX OK
 #define RX_FINISHED_MASK				0x00002000 // RX FINISHED
 #define RX_NO_ERROR_MASK				0x00004000 // RX NO ERROR
+#define RX_ERROR_MASK						0x00001000 // RX ERROR
+#define RX_TIMEOUT_MASK					0x00020000 // RX TIMEOUT
 
 // State Machine Master
 #define STATE_INIT							1
@@ -124,11 +127,12 @@
 
 // State Machine Slave
 #define STATE_INIT							1
-#define STATE_FIRST_RECEIVE			2
-#define STATE_RESPONSE					3
-#define STATE_SECOND_RECEIVE		4
+#define STATE_WAIT_RECEIVE			2
+#define STATE_MESSAGE_1					3
+#define STATE_MESSAGE_2					4
 #define STATE_SEND_TIMES				5
 #define STATE_END_CYCLE					6
+#define STATE_SEND_RESPONSE			7
 
 
 /* USER CODE END Private defines */

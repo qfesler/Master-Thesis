@@ -68,6 +68,7 @@
 #define TX_OK_BIT								7
 #define RX_FINISHED_BIT					13
 #define RX_NO_ERROR_BIT					14
+#define WAIT4RESP_BIT						7
 
 /* ------------------------------------- */
 /* DEVICE MODE                           */

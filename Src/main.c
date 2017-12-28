@@ -77,6 +77,7 @@ double distance;
 // Boolean variables
 uint8_t TxOk = 0;
 uint8_t RxOk = 0;
+uint8_t RxError = 0;
 
 int state;
 /* USER CODE END PV */
@@ -141,49 +142,59 @@ int main(void)
   /* USER CODE BEGIN 3 */
 #ifdef MASTER_BOARD
 		switch (state){
-			case STATE_INIT : 
-				DWM_Disable_Rx();
-				HAL_Delay(1000); // 1sec between 2 measures	
+			case STATE_INIT :
+					// IDLE to save Power
+					DWM_Disable_Rx();
+					HAL_GPIO_WritePin(GPIOC, LD3_Pin, GPIO_PIN_SET);
+					HAL_GPIO_WritePin(GPIOC, LD4_Pin, GPIO_PIN_RESET);
+					HAL_GPIO_WritePin(GPIOC, LD5_Pin, GPIO_PIN_RESET);
+					HAL_GPIO_WritePin(GPIOC, LD6_Pin, GPIO_PIN_RESET);
+					
+					HAL_Delay(1000); // 1sec between 2 measures
+				
 					//Send first data
-				TxData[0] = MASTER_STANDARD_MESSAGE;
-				printf("sending data\n");
-				DWM_SendData(TxData, 1);
+					TxData[0] = MASTER_FIRST_MESSAGE;
+					printf("sending data\n");
+					DWM_SendData(TxData, 1);
+				
 					//Change state to wait TX OK (polling)
-				printf("Wait TX \n");
-				state = STATE_WAIT_FIRST_SEND;
-				HAL_GPIO_WritePin(GPIOC, LD6_Pin, GPIO_PIN_SET);
+					state = STATE_WAIT_FIRST_SEND;
 			break;
 			
 			case STATE_WAIT_FIRST_SEND:
 				if (TxOk){
 					//get tx time (T1)
-					DWM_Enable_Rx();
 					DWM_ReadSPI_ext(TX_TIME, NO_SUB, t1_8, 5);
 					state = STATE_WAIT_RESPONSE;
 					TxOk = 0;
-					printf("Tx OK \n");
 					HAL_GPIO_WritePin(GPIOC, LD5_Pin, GPIO_PIN_SET);
-					HAL_GPIO_WritePin(GPIOC, LD3_Pin, GPIO_PIN_SET);
-					HAL_GPIO_WritePin(GPIOC, LD4_Pin, GPIO_PIN_RESET);
 				}	
 			break;
 				
 			case STATE_WAIT_RESPONSE:
-				//printf("RX IS %" PRIx8 "\n", RxOk);
+				if (RxError){
+					RxError = 0;
+					state = STATE_INIT;
+				}
 				if (RxOk){
 					// Read Rx buffer
 					DWM_ReceiveData(RxData);
-					printf("received \n");
 					// Check RxFrame
 					if (RxData[0] == SLAVE_STANDARD_MESSAGE){
 						//get rx time (t4)
 						DWM_ReadSPI_ext(RX_TIME, NO_SUB, t4_8, 5);
 						
 						//Send second time
-						HAL_Delay(10);
+						HAL_Delay(1);
+						TxData[0] = MASTER_SECOND_MESSAGE;
 						DWM_SendData(TxData, 1);
 						state = STATE_WAIT_SECOND_SEND;
 						printf("sending 2nd time \n");
+						HAL_GPIO_WritePin(GPIOC, LD6_Pin, GPIO_PIN_SET);
+					}
+					else {
+						printf("Transmission error \n");
+						state = STATE_INIT;
 					}
 					RxOk = 0;
 				}
@@ -192,19 +203,22 @@ int main(void)
 			case STATE_WAIT_SECOND_SEND:
 					if (TxOk){
 					//get tx time (T5)
-						printf("TX 2 ok \n");
-					DWM_ReadSPI_ext(TX_TIME, NO_SUB, t5_8, 5);
-					state = STATE_GET_TIMES;
-					TxOk = 0;
-					DWM_Enable_Rx();
+						DWM_ReadSPI_ext(TX_TIME, NO_SUB, t5_8, 5);
+						state = STATE_GET_TIMES;
+						TxOk = 0;
 				}
 			break;
 			
 			case STATE_GET_TIMES:
+				if (RxError){
+					state = STATE_INIT;
+					RxError = 0;
+				}
 				if (RxOk){
 					//Read Rx Buffer
 					DWM_ReceiveData(RxData);
 					
+					HAL_GPIO_WritePin(GPIOC, LD4_Pin, GPIO_PIN_SET);
 					for (int i=0;i<5;i++){
 						t2_8[i] = RxData[i];
 						t3_8[i] = RxData[i+5];
@@ -237,14 +251,18 @@ int main(void)
 				uint64_t TreplyB = (t3-t2);
 				uint64_t TroundB = (t6-t3);
 				uint64_t TreplyA = (t5-t4);
-				tof = (2*t4 - t1 - 2*t3 + t2 + t6 - t5)/4;
+				tof = (TroundA - TreplyB) + (TroundB-TreplyA);
+				tof = tof /4;
 				printf("tr1 = %"PRIu64"\n", TroundA);
 				printf("tp1 = %"PRIu64"\n", TreplyB);
-				printf("tr2 = %"PRIu64"\n", TroundB);
-				printf("tp2 = %"PRIu64"\n", TreplyA);
+				printf("t1 = %"PRIu64"\n", t1);
+				printf("t4 = %"PRIu64"\n", t4);
+				printf("t2 = %"PRIu64"\n", t2);
+				printf("t3 = %"PRIu64"\n", t3);
+				if (TreplyB > TroundA){printf("tof negative : OVERFLOW \n");}
 			
-			printf("TOF : %" PRIu64"\n",tof);
-			double tofdouble = 1.0*tof;
+				printf("TOF : %" PRIu64"\n",tof);
+				double tofdouble = 1.0*tof;
 				double distancepicosec = tofdouble /(128*499.2);
 				distance = distancepicosec * 299792458 * 0.000001;
 				printf("Distance = %f\n", distance);				
@@ -258,64 +276,61 @@ int main(void)
 			case STATE_INIT :
 				DWM_Enable_Rx();
 				HAL_Delay(1);
-				state = STATE_FIRST_RECEIVE;
-				HAL_GPIO_WritePin(GPIOC, LD6_Pin, GPIO_PIN_SET);
+				state = STATE_WAIT_RECEIVE;
+				HAL_GPIO_WritePin(GPIOC, LD3_Pin, GPIO_PIN_SET);
+				HAL_GPIO_WritePin(GPIOC, LD4_Pin, GPIO_PIN_RESET);
+				HAL_GPIO_WritePin(GPIOC, LD5_Pin, GPIO_PIN_RESET);
+				HAL_GPIO_WritePin(GPIOC, LD6_Pin, GPIO_PIN_RESET);
 				printf("ready to receive \n");
 			break;
 			
-			case STATE_FIRST_RECEIVE :
+			case STATE_WAIT_RECEIVE :
+				if (RxError){
+					state = STATE_INIT;
+					RxError = 0;
+				}
 				if (RxOk){
 					// Read Rx buffer
 					DWM_ReceiveData(RxData);				
 					// Check RxFrame
-					if (RxData[0] == MASTER_STANDARD_MESSAGE){
-						//get rx time (t2)
-						DWM_ReadSPI_ext(RX_TIME, NO_SUB, t2_8, 5);
-
-						//DWM_Disable_Rx();
-						//Send ack
-						HAL_Delay(10);	
-						TxData[0] = SLAVE_STANDARD_MESSAGE;
-						HAL_GPIO_WritePin(GPIOC, LD6_Pin, GPIO_PIN_RESET);
+					if (RxData[0] == MASTER_FIRST_MESSAGE){
+						state = STATE_MESSAGE_1;
 						HAL_GPIO_WritePin(GPIOC, LD5_Pin, GPIO_PIN_SET);
-						DWM_SendData(TxData, 1);
-						state = STATE_RESPONSE;	
+					}
+					if (RxData[0] == MASTER_SECOND_MESSAGE){
+						state = STATE_MESSAGE_2;
+						HAL_GPIO_WritePin(GPIOC, LD4_Pin, GPIO_PIN_SET);
 					}
 					RxOk = 0;	
 				}
 			break;
+				
+			case STATE_MESSAGE_1:
+				// get T2
+				DWM_ReadSPI_ext(RX_TIME,NO_SUB, t2_8,5);
+				HAL_Delay(1);
+				TxData[0] = SLAVE_STANDARD_MESSAGE;
+				DWM_SendData(TxData, 1);
+				state = STATE_SEND_RESPONSE;
+			break;
 			
-			case STATE_RESPONSE :
+			case STATE_SEND_RESPONSE :
 				if (TxOk){
 					//get tx time (T3)
-					printf("TXBIT IS %" PRIx8 "\n",TxOk);
 					HAL_GPIO_WritePin(GPIOC, LD6_Pin, GPIO_PIN_SET);
 					DWM_ReadSPI_ext(TX_TIME, NO_SUB, t3_8, 5);
-					state = STATE_SECOND_RECEIVE;
 					TxOk = 0;
-					DWM_Enable_Rx();
-					printf("waiting second message");
+					state = STATE_WAIT_RECEIVE;
 				}
 			break;
 			
-			case STATE_SECOND_RECEIVE :
-				if (RxOk){
-					// Read Rx buffer
-					DWM_ReceiveData(RxData);
-					// Check RxFrame
-					if (RxData[0] == MASTER_STANDARD_MESSAGE){
-						//get rx time (t6)
-						DWM_ReadSPI_ext(RX_TIME, NO_SUB, t6_8, 5);
-						HAL_Delay(100);
-						state = STATE_SEND_TIMES;
-					}
-					RxOk = 0;
-				}
+			case STATE_MESSAGE_2 :
+				//get T6
+				DWM_ReadSPI_ext(RX_TIME, NO_SUB, t6_8,5);
+				state = STATE_SEND_TIMES;
 			break;
 			
 			case STATE_SEND_TIMES :
-				HAL_GPIO_WritePin(GPIOC, LD5_Pin, GPIO_PIN_RESET);
-				HAL_GPIO_WritePin(GPIOC, LD4_Pin, GPIO_PIN_SET);
 				for (int i=0; i<5; i++){
 					TxData[i] = t2_8[i];
 					TxData[i+5] = t3_8[i];
@@ -553,6 +568,12 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin){
 			RxOk = 1;
 			setBit(ack, 4, RX_NO_ERROR_BIT, 1);
 		}
+	}
+	
+	if ((StatusRegister & RX_ERROR_MASK) | (StatusRegister & RX_TIMEOUT_MASK)){
+		RxError = 1;
+		setBit(ack,4,12,1);
+		setBit(ack,4,17,1);
 	}
 	// clear IRQ flags on DW
 	DWM_WriteSPI_ext(SYS_STATUS ,NO_SUB, ack, 4);

@@ -63,13 +63,22 @@ void DWM_Init(void){
 	fctrl[3] = 0x00;
 	fctrl[4] = 0x00;
 	DWM_WriteSPI_ext(TX_FCTRL, NO_SUB, fctrl, TX_FCTRL_LEN);
-  // setup of the irq : MASK 0x00000080 TX OK
-                      //MASK 0x00002000 RX FINISHED
-                      //MASK 0x00004000 RX NO ERROR
+	
+	// setup Rx Timeout 5ms
+	uint8_t timeout[] = {0x88, 0x13};
+	DWM_WriteSPI_ext(RX_FWTO,NO_SUB, timeout, 2);
+	DWM_ReadSPI_ext(SYS_CFG, NO_SUB, sysCfg, SYS_CFG_LEN);
+	setBit(sysCfg, SYS_CFG_LEN, 28,1);
+	DWM_WriteSPI_ext(SYS_CFG, NO_SUB, sysCfg, SYS_CFG_LEN);
+	
+	
+  // setup of the irq
 	uint8_t sysMask[SYS_MASK_LEN];
 	DWM_ReadSPI_ext(SYS_MASK, NO_SUB, sysMask, SYS_MASK_LEN);
 	setBit(sysMask,SYS_MASK_LEN,7,1);//TX OK
 	setBit(sysMask,SYS_MASK_LEN,14,1);//RX OK NO ERROR
+	setBit(sysMask,SYS_MASK_LEN,12,1);// RX ERROR
+	setBit(sysMask,SYS_MASK_LEN,17,1);// RX Timeout
   DWM_WriteSPI_ext(SYS_MASK, NO_SUB, sysMask, SYS_MASK_LEN);
 
   // antenna delay 
@@ -78,6 +87,7 @@ void DWM_Init(void){
 	delayuint8[1] = (delayuint16 & 0xFF00) >>8;
 	delayuint8[0] = (delayuint16 & 0xFF);
 	DWM_WriteSPI_ext(TX_ANTD, NO_SUB, delayuint8, 2);
+	DWM_WriteSPI_ext(LDE_CTRL, 0x1804, delayuint8,2);
 
 	// ERIC - Check SYS_STATUS
 		// clear IRQ flags on DW
@@ -276,8 +286,9 @@ void DWM_SendData(uint8_t* data, uint8_t len){ // data limited to 125 byte long
 	// START SENDING
 	// Set bit TXSTRT to 1
 	setBit(_sysctrl, LEN_SYS_CTRL, TXSTRT_BIT, 1);
-	// Remove Force idle mode
+	// Remove Force idle mode and wait for response
 	setBit(_sysctrl, LEN_SYS_CTRL, TRXOFF_BIT, 0);
+	setBit(_sysctrl, LEN_SYS_CTRL, WAIT4RESP_BIT, 1);
 	// Set the device in TX mode
 	_deviceMode = TX_MODE;
 	// Update the DWM1000 module
