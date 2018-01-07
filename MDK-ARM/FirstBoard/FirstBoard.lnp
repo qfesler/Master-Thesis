@@ -16,6 +16,8 @@
 "firstboard\stm32f0xx_hal.o"
 "firstboard\stm32f0xx_hal_i2c.o"
 "firstboard\stm32f0xx_hal_cortex.o"
+"firstboard\stm32f0xx_hal_uart.o"
+"firstboard\stm32f0xx_hal_uart_ex.o"
 "firstboard\startup_stm32f072xb.o"
 "firstboard\main.o"
 "firstboard\stm32f0xx_it.o"

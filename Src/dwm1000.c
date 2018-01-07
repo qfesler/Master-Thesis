@@ -91,7 +91,7 @@ void DWM_Init(void){
 	delayuint8[1] = (delayuint16 & 0xFF00) >>8;
 	delayuint8[0] = (delayuint16 & 0xFF);
 	DWM_WriteSPI_ext(TX_ANTD, NO_SUB, delayuint8, 2);
-	DWM_WriteSPI_ext(LDE_CTRL, 0x1804, delayuint8,2);
+	//DWM_WriteSPI_ext(LDE_CTRL, 0x1804, delayuint8,2);
 
 	// ERIC - Check SYS_STATUS
 		// clear IRQ flags on DW

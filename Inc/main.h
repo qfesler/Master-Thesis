@@ -9,7 +9,7 @@
   * inserted by the user or by software development tools
   * are owned by their respective copyright owners.
   *
-  * COPYRIGHT(c) 2017 STMicroelectronics
+  * COPYRIGHT(c) 2018 STMicroelectronics
   *
   * Redistribution and use in source and binary forms, with or without modification,
   * are permitted provided that the following conditions are met:
@@ -100,16 +100,19 @@
 /* #define USE_FULL_ASSERT    1U */
 
 /* USER CODE BEGIN Private defines */
+// board switching
 //#define SLAVE_BOARD
 #define MASTER_BOARD
+
+// Antenna calibration
+#define ANTENNA_DELAY 					0x8066//0x40BC //0x4034//0x8066  /!\ From decarduino 
+#define THEORETICAL_DISTANCE		5.1
 
 #define ADRESS_AND_PAN					0x000000FF
 
 #define MASTER_FIRST_MESSAGE				0x11
 #define MASTER_SECOND_MESSAGE				0x22
 #define SLAVE_STANDARD_MESSAGE			0xAA
-
-#define ANTENNA_DELAY 					0x00 //0x4034//0x8066  /!\ From decarduino 
 
 #define TX_OK_MASK							0x00000080 // TX OK
 #define RX_FINISHED_MASK				0x00002000 // RX FINISHED

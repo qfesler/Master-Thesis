@@ -9,7 +9,7 @@
   * inserted by the user or by software development tools
   * are owned by their respective copyright owners.
   *
-  * COPYRIGHT(c) 2017 STMicroelectronics
+  * COPYRIGHT(c) 2018 STMicroelectronics
   *
   * Redistribution and use in source and binary forms, with or without modification,
   * are permitted provided that the following conditions are met:
@@ -51,6 +51,8 @@
 /* Private variables ---------------------------------------------------------*/
 SPI_HandleTypeDef hspi1;
 
+UART_HandleTypeDef huart1;
+
 /* USER CODE BEGIN PV */
 /* Private variables ---------------------------------------------------------*/
 uint8_t RxData[128];
@@ -80,12 +82,26 @@ uint8_t RxOk = 0;
 uint8_t RxError = 0;
 
 int state;
+
+// UART Variables
+
+int uartLen;
+char uartBuffer[100];
+char uartRx_indx, uartRx_data[2],uartRxBuffer[100], uartTransfer_cplt;
+int uartPress_enter = 0;
+
+// antenna calibration variables
+int measure_counter = 0;
+float moy_distance = 0;
+float moy_tof = 0;
+int old_antenna_delay = ANTENNA_DELAY;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
 void SystemClock_Config(void);
 static void MX_GPIO_Init(void);
 static void MX_SPI1_Init(void);
+static void MX_USART1_UART_Init(void);
 
 /* USER CODE BEGIN PFP */
 /* Private function prototypes -----------------------------------------------*/
@@ -122,6 +138,7 @@ int main(void)
   /* Initialize all configured peripherals */
   MX_GPIO_Init();
   MX_SPI1_Init();
+  MX_USART1_UART_Init();
 
   /* USER CODE BEGIN 2 */
 	_deviceHandle = &hspi1;					// Assign SPI handle
@@ -131,6 +148,12 @@ int main(void)
 	HAL_Delay(10); //time for the DW to go from Wakeup to init and then IDLE
 	DWM_Init();
 	state = STATE_INIT;
+	
+	HAL_UART_Receive_IT(&huart1, (uint8_t *)uartRx_data, 1);
+	__disable_irq();
+	uartLen = sprintf(uartBuffer, "Hello World ! \r\n");
+	HAL_UART_Transmit(&huart1, (uint8_t *)uartBuffer, uartLen, HAL_MAX_DELAY);
+	__enable_irq();
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -150,7 +173,7 @@ int main(void)
 					HAL_GPIO_WritePin(GPIOC, LD5_Pin, GPIO_PIN_RESET);
 					HAL_GPIO_WritePin(GPIOC, LD6_Pin, GPIO_PIN_RESET);
 					
-					HAL_Delay(1000); // 1sec between 2 measures
+					HAL_Delay(10); // 1sec between 2 measures
 				
 					//Send first data
 					TxData[0] = MASTER_FIRST_MESSAGE;
@@ -253,19 +276,52 @@ int main(void)
 				uint64_t TreplyA = (t5-t4);
 				tof = (TroundA - TreplyB) + (TroundB-TreplyA);
 				tof = tof /4;
-				printf("tr1 = %"PRIu64"\n", TroundA);
+				/*printf("tr1 = %"PRIu64"\n", TroundA);
 				printf("tp1 = %"PRIu64"\n", TreplyB);
 				printf("t1 = %"PRIu64"\n", t1);
 				printf("t4 = %"PRIu64"\n", t4);
 				printf("t2 = %"PRIu64"\n", t2);
-				printf("t3 = %"PRIu64"\n", t3);
-				if (TreplyB > TroundA){printf("tof negative : OVERFLOW \n");}
-			
+				printf("t3 = %"PRIu64"\n", t3);*/
+				if (TreplyB > TroundA){
+					printf("tof negative : OVERFLOW \n");
+					tof = 0;
+				}
 				printf("TOF : %" PRIu64"\n",tof);
 				double tofdouble = 1.0*tof;
 				double distancepicosec = tofdouble /(128*499.2);
 				distance = distancepicosec * 299792458 * 0.000001;
-				printf("Distance = %f\n", distance);				
+				printf("Distance = %f\n", distance);		
+				// antenna tunning
+				moy_distance = moy_distance + ((distance-moy_distance)/measure_counter);
+				moy_tof = moy_tof + ((tofdouble-moy_tof)/measure_counter);	
+				measure_counter++;
+				__disable_irq();
+				uartLen = sprintf(uartBuffer, "Distance = %f / Moyenne = %f / mesure %d / ant %d \r\n", distance, moy_distance, measure_counter, old_antenna_delay);
+				HAL_UART_Transmit(&huart1, (uint8_t *)uartBuffer, uartLen, HAL_MAX_DELAY);
+				__enable_irq();
+				if (measure_counter >1000){
+					float tof_theorique = (THEORETICAL_DISTANCE/(299702547 * 0.000001))*128*499.2;
+					int ant_error = (moy_tof-tof_theorique)/2;
+					while (!uartPress_enter){
+						__disable_irq();
+						uartLen = sprintf(uartBuffer, "Sample finished; antenna error is %d", ant_error);
+						HAL_UART_Transmit(&huart1, (uint8_t *)uartBuffer, uartLen, HAL_MAX_DELAY);
+						__enable_irq();
+					}
+					uint16_t delayuint16 = ant_error + old_antenna_delay;
+					old_antenna_delay = delayuint16;
+					__disable_irq();
+					uartLen = sprintf(uartBuffer, "antenna delay  is %d", delayuint16);
+						HAL_UART_Transmit(&huart1, (uint8_t *)uartBuffer, uartLen, HAL_MAX_DELAY);
+						__enable_irq();
+					uint8_t delayuint8[2];
+					delayuint8[1] = (delayuint16 & 0xFF00) >>8;
+					delayuint8[0] = (delayuint16 & 0xFF);
+					DWM_WriteSPI_ext(TX_ANTD, NO_SUB, delayuint8, 2);
+					measure_counter = 0;
+					//DWM_WriteSPI_ext(LDE_CTRL, 0x1804, delayuint8,2);
+				}
+
 				state = STATE_INIT;
 			break;
 		}
@@ -356,10 +412,12 @@ int main(void)
 
 /** System Clock Configuration
 */
-void SystemClock_Config(void){
+void SystemClock_Config(void)
+{
 
   RCC_OscInitTypeDef RCC_OscInitStruct;
   RCC_ClkInitTypeDef RCC_ClkInitStruct;
+  RCC_PeriphCLKInitTypeDef PeriphClkInit;
 
     /**Initializes the CPU, AHB and APB busses clocks 
     */
@@ -384,6 +442,13 @@ void SystemClock_Config(void){
   RCC_ClkInitStruct.APB1CLKDivider = RCC_HCLK_DIV1;
 
   if (HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_0) != HAL_OK)
+  {
+    _Error_Handler(__FILE__, __LINE__);
+  }
+
+  PeriphClkInit.PeriphClockSelection = RCC_PERIPHCLK_USART1;
+  PeriphClkInit.Usart1ClockSelection = RCC_USART1CLKSOURCE_PCLK1;
+  if (HAL_RCCEx_PeriphCLKConfig(&PeriphClkInit) != HAL_OK)
   {
     _Error_Handler(__FILE__, __LINE__);
   }
@@ -420,6 +485,27 @@ static void MX_SPI1_Init(void)
   hspi1.Init.CRCLength = SPI_CRC_LENGTH_DATASIZE;
   hspi1.Init.NSSPMode = SPI_NSS_PULSE_DISABLE;
   if (HAL_SPI_Init(&hspi1) != HAL_OK)
+  {
+    _Error_Handler(__FILE__, __LINE__);
+  }
+
+}
+
+/* USART1 init function */
+static void MX_USART1_UART_Init(void)
+{
+
+  huart1.Instance = USART1;
+  huart1.Init.BaudRate = 9600;
+  huart1.Init.WordLength = UART_WORDLENGTH_8B;
+  huart1.Init.StopBits = UART_STOPBITS_1;
+  huart1.Init.Parity = UART_PARITY_NONE;
+  huart1.Init.Mode = UART_MODE_TX_RX;
+  huart1.Init.HwFlowCtl = UART_HWCONTROL_NONE;
+  huart1.Init.OverSampling = UART_OVERSAMPLING_16;
+  huart1.Init.OneBitSampling = UART_ONE_BIT_SAMPLE_DISABLE;
+  huart1.AdvancedInit.AdvFeatureInit = UART_ADVFEATURE_NO_INIT;
+  if (HAL_UART_Init(&huart1) != HAL_OK)
   {
     _Error_Handler(__FILE__, __LINE__);
   }
@@ -578,6 +664,16 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin){
 	// clear IRQ flags on DW
 	DWM_WriteSPI_ext(SYS_STATUS ,NO_SUB, ack, 4);
 }
+void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart){
+	if (huart->Instance == USART1){  //current UART
+		if (uartRx_data[0]==13){ //if received data is ascii 13 (enter)
+			uartPress_enter = 1;
+		}
+		
+		HAL_UART_Receive_IT(&huart1, (uint8_t *)uartRx_data, 1);
+	}
+}
+
 /* USER CODE END 4 */
 
 /**
