@@ -100,8 +100,8 @@
 /* #define USE_FULL_ASSERT    1U */
 
 /* USER CODE BEGIN Private defines */
-#define SLAVE_BOARD
-//#define MASTER_BOARD
+//#define SLAVE_BOARD
+#define MASTER_BOARD
 
 #define ADRESS_AND_PAN					0x000000FF
 

@@ -47,12 +47,13 @@ void DWM_Init(void){
 	setBit(sysCfg,SYS_CFG_LEN,22,1);//setting 110kbps
   DWM_WriteSPI_ext(SYS_CFG, NO_SUB, sysCfg, SYS_CFG_LEN);
 	
-	/*// CHAN_CTRL
+	// CHAN_CTRL
 	uint8_t chanCtrl[CHAN_CTRL_LEN];
 	DWM_ReadSPI_ext(CHAN_CTRL, NO_SUB, chanCtrl, CHAN_CTRL_LEN);
+	chanCtrl[0] = 0x55;
 	chanCtrl[2] &= 0xC5;
-	chanCtrl[2] &= 0x04;
-  DWM_WriteSPI_ext(CHAN_CTRL, NO_SUB, chanCtrl, CHAN_CTRL_LEN);*/
+	chanCtrl[2] |= 0x04;
+  DWM_WriteSPI_ext(CHAN_CTRL, NO_SUB, chanCtrl, CHAN_CTRL_LEN);
 	
 	// F_CTRL
 	uint8_t fctrl[TX_FCTRL_LEN];
@@ -65,20 +66,23 @@ void DWM_Init(void){
 	DWM_WriteSPI_ext(TX_FCTRL, NO_SUB, fctrl, TX_FCTRL_LEN);
 	
 	// setup Rx Timeout 5ms
+#ifdef MASTER_BOARD
 	uint8_t timeout[] = {0x88, 0x13};
 	DWM_WriteSPI_ext(RX_FWTO,NO_SUB, timeout, 2);
 	DWM_ReadSPI_ext(SYS_CFG, NO_SUB, sysCfg, SYS_CFG_LEN);
 	setBit(sysCfg, SYS_CFG_LEN, 28,1);
 	DWM_WriteSPI_ext(SYS_CFG, NO_SUB, sysCfg, SYS_CFG_LEN);
-	
+#endif
 	
   // setup of the irq
 	uint8_t sysMask[SYS_MASK_LEN];
 	DWM_ReadSPI_ext(SYS_MASK, NO_SUB, sysMask, SYS_MASK_LEN);
 	setBit(sysMask,SYS_MASK_LEN,7,1);//TX OK
 	setBit(sysMask,SYS_MASK_LEN,14,1);//RX OK NO ERROR
+#ifdef MASTER_BOARD
 	setBit(sysMask,SYS_MASK_LEN,12,1);// RX ERROR
 	setBit(sysMask,SYS_MASK_LEN,17,1);// RX Timeout
+#endif
   DWM_WriteSPI_ext(SYS_MASK, NO_SUB, sysMask, SYS_MASK_LEN);
 
   // antenna delay 
