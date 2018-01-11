@@ -101,12 +101,13 @@
 
 /* USER CODE BEGIN Private defines */
 // board switching
+//#define UART_PLUGGED
 //#define SLAVE_BOARD
 #define MASTER_BOARD
 
-// Antenna calibration
-#define ANTENNA_DELAY 					0x8066//0x40BC //0x4034//0x8066  /!\ From decarduino 
-#define THEORETICAL_DISTANCE		5.1
+// Antenna calibration					// 0x8246 to test 
+#define ANTENNA_DELAY 					0x8338//0x40BC //0x4034//0x8066  /!\ From decarduino 
+#define THEORETICAL_DISTANCE		5.49
 
 #define ADRESS_AND_PAN					0x000000FF
 

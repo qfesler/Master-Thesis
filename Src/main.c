@@ -70,12 +70,6 @@ uint64_t tof;
 
 double distance;
 
-/* bad define ... type conflict 
-#define AIR_SPEED_OF_LIGHT 229702547.0
-#define DW1000_TIMEBASE 15.65E-12
-#define COEFF AIR_SPEED_OF_LIGHT*DW1000_TIMEBASE
-*/
-
 // Boolean variables
 uint8_t TxOk = 0;
 uint8_t RxOk = 0;
@@ -142,18 +136,19 @@ int main(void)
 
   /* USER CODE BEGIN 2 */
 	_deviceHandle = &hspi1;					// Assign SPI handle
-	
-	printf("Hello World \n ");
+
 	/* initialisation of the DecaWave */
 	HAL_Delay(10); //time for the DW to go from Wakeup to init and then IDLE
 	DWM_Init();
 	state = STATE_INIT;
 	
 	HAL_UART_Receive_IT(&huart1, (uint8_t *)uartRx_data, 1);
+	#ifdef UART_PLUGGED
 	__disable_irq();
 	uartLen = sprintf(uartBuffer, "Hello World ! \r\n");
 	HAL_UART_Transmit(&huart1, (uint8_t *)uartBuffer, uartLen, HAL_MAX_DELAY);
 	__enable_irq();
+	#endif
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -173,11 +168,10 @@ int main(void)
 					HAL_GPIO_WritePin(GPIOC, LD5_Pin, GPIO_PIN_RESET);
 					HAL_GPIO_WritePin(GPIOC, LD6_Pin, GPIO_PIN_RESET);
 					
-					HAL_Delay(10); // 1sec between 2 measures
+					HAL_Delay(1); // 1sec between 2 measures
 				
 					//Send first data
 					TxData[0] = MASTER_FIRST_MESSAGE;
-					printf("sending data\n");
 					DWM_SendData(TxData, 1);
 				
 					//Change state to wait TX OK (polling)
@@ -212,11 +206,9 @@ int main(void)
 						TxData[0] = MASTER_SECOND_MESSAGE;
 						DWM_SendData(TxData, 1);
 						state = STATE_WAIT_SECOND_SEND;
-						printf("sending 2nd time \n");
 						HAL_GPIO_WritePin(GPIOC, LD6_Pin, GPIO_PIN_SET);
 					}
 					else {
-						printf("Transmission error \n");
 						state = STATE_INIT;
 					}
 					RxOk = 0;
@@ -248,12 +240,7 @@ int main(void)
 						t6_8[i] = RxData[i+10];
 					}
 					// Cast all times to uint64
-					t1 = 0;
-					t2 = 0;
-					t3 = 0;
-					t4 = 0;
-					t5 = 0;
-					t6= 0;
+					t1 = t2 = t3 = t4 = t5 = t6 = 0;
 					for (int i=0;i<5;i++){
 						t1 = (t1 << 8) | t1_8[4-i];
 						t2 = (t2 << 8) | t2_8[4-i];
@@ -262,66 +249,58 @@ int main(void)
 						t5 = (t5 << 8) | t5_8[4-i];
 						t6 = (t6 << 8) | t6_8[4-i];
 					}
-					printf("Got times \n ");
 					state = STATE_COMPUTE_DISTANCE;
 					RxOk = 0;
 				}
 			break;
 				
 			case STATE_COMPUTE_DISTANCE :
-				printf("computing times \n");
+				__NOP;
 				uint64_t TroundA = (t4-t1);
 				uint64_t TreplyB = (t3-t2);
 				uint64_t TroundB = (t6-t3);
 				uint64_t TreplyA = (t5-t4);
 				tof = (TroundA - TreplyB) + (TroundB-TreplyA);
 				tof = tof /4;
-				/*printf("tr1 = %"PRIu64"\n", TroundA);
-				printf("tp1 = %"PRIu64"\n", TreplyB);
-				printf("t1 = %"PRIu64"\n", t1);
-				printf("t4 = %"PRIu64"\n", t4);
-				printf("t2 = %"PRIu64"\n", t2);
-				printf("t3 = %"PRIu64"\n", t3);*/
-				if (TreplyB > TroundA){
-					printf("tof negative : OVERFLOW \n");
-					tof = 0;
-				}
-				printf("TOF : %" PRIu64"\n",tof);
+				if (TreplyB > TroundA){tof = 0;}
 				double tofdouble = 1.0*tof;
 				double distancepicosec = tofdouble /(128*499.2);
 				distance = distancepicosec * 299792458 * 0.000001;
-				printf("Distance = %f\n", distance);		
+				if (distance > 100){distance = moy_distance;}
 				// antenna tunning
 				moy_distance = moy_distance + ((distance-moy_distance)/measure_counter);
 				moy_tof = moy_tof + ((tofdouble-moy_tof)/measure_counter);	
 				measure_counter++;
+				#ifdef UART_PLUGGED
 				__disable_irq();
 				uartLen = sprintf(uartBuffer, "Distance = %f / Moyenne = %f / mesure %d / ant %d \r\n", distance, moy_distance, measure_counter, old_antenna_delay);
 				HAL_UART_Transmit(&huart1, (uint8_t *)uartBuffer, uartLen, HAL_MAX_DELAY);
 				__enable_irq();
-				if (measure_counter >1000){
+				#endif
+				if (measure_counter >100){
 					float tof_theorique = (THEORETICAL_DISTANCE/(299702547 * 0.000001))*128*499.2;
 					int ant_error = (moy_tof-tof_theorique)/2;
-					while (!uartPress_enter){
-						__disable_irq();
-						uartLen = sprintf(uartBuffer, "Sample finished; antenna error is %d", ant_error);
-						HAL_UART_Transmit(&huart1, (uint8_t *)uartBuffer, uartLen, HAL_MAX_DELAY);
-						__enable_irq();
-					}
-					uint16_t delayuint16 = ant_error + old_antenna_delay;
-					old_antenna_delay = delayuint16;
+					#ifdef UART_PLUGGED
 					__disable_irq();
-					uartLen = sprintf(uartBuffer, "antenna delay  is %d", delayuint16);
-						HAL_UART_Transmit(&huart1, (uint8_t *)uartBuffer, uartLen, HAL_MAX_DELAY);
-						__enable_irq();
-					uint8_t delayuint8[2];
-					delayuint8[1] = (delayuint16 & 0xFF00) >>8;
-					delayuint8[0] = (delayuint16 & 0xFF);
-					DWM_WriteSPI_ext(TX_ANTD, NO_SUB, delayuint8, 2);
+					uartLen = sprintf(uartBuffer, "\r \nSample finished; antenna error is 0x%04X /distance : %f \r \n", ant_error, moy_distance);
+					HAL_UART_Transmit(&huart1, (uint8_t *)uartBuffer, uartLen, HAL_MAX_DELAY);
+					__enable_irq();
+					#endif
+					while (!uartPress_enter){
+						HAL_GPIO_TogglePin(GPIOC, LD3_Pin);
+						HAL_Delay(100);
+					}
 					measure_counter = 0;
-					//DWM_WriteSPI_ext(LDE_CTRL, 0x1804, delayuint8,2);
+					uartPress_enter = 0;
+					moy_distance = 0;
+					#ifdef UART_PLUGGED
+					__disable_irq();
+					uartLen = sprintf(uartBuffer, "Restart\r \n");
+					HAL_UART_Transmit(&huart1, (uint8_t *)uartBuffer, uartLen, HAL_MAX_DELAY);
+					__enable_irq();
+					#endif
+					state = STATE_INIT;
 				}
-
 				state = STATE_INIT;
 			break;
 		}
@@ -337,7 +316,6 @@ int main(void)
 				HAL_GPIO_WritePin(GPIOC, LD4_Pin, GPIO_PIN_RESET);
 				HAL_GPIO_WritePin(GPIOC, LD5_Pin, GPIO_PIN_RESET);
 				HAL_GPIO_WritePin(GPIOC, LD6_Pin, GPIO_PIN_RESET);
-				printf("ready to receive \n");
 			break;
 			
 			case STATE_WAIT_RECEIVE :
@@ -626,22 +604,18 @@ static void MX_GPIO_Init(void)
 
 void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin){
 	if (GPIO_Pin != SPI_IRQ_Pin){return;}
-	
 	uint8_t RxBuffer[4];
 	uint32_t StatusRegister;
 	uint8_t ack[4];
-	memset(ack, 0, 4);
-		
+	memset(ack, 0, 4);	
 	// Getting status Register
 	DWM_ReadSPI_ext(SYS_STATUS, NO_SUB,  RxBuffer, 4);
 	StatusRegister  = (RxBuffer[3] << 24) | (RxBuffer[2] << 16) | (RxBuffer[1] << 8) | RxBuffer[0];
 	if (StatusRegister == 0xFFFFFFFF) {
 		// Read again
-		printf("DWM was in sleep mode\n");
 		DWM_ReadSPI_ext(SYS_STATUS, NO_SUB,  RxBuffer, 4);
 		StatusRegister  = (RxBuffer[3] << 24) | (RxBuffer[2] << 16) | (RxBuffer[1] << 8) | RxBuffer[0];
 	}
-
 	if (StatusRegister & TX_OK_MASK){
 		TxOk = 1;
 		setBit(ack, 4, TX_OK_BIT, 1);
@@ -655,7 +629,6 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin){
 			setBit(ack, 4, RX_NO_ERROR_BIT, 1);
 		}
 	}
-	
 	if ((StatusRegister & RX_ERROR_MASK) | (StatusRegister & RX_TIMEOUT_MASK)){
 		RxError = 1;
 		setBit(ack,4,12,1);
@@ -668,8 +641,7 @@ void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart){
 	if (huart->Instance == USART1){  //current UART
 		if (uartRx_data[0]==13){ //if received data is ascii 13 (enter)
 			uartPress_enter = 1;
-		}
-		
+		}	
 		HAL_UART_Receive_IT(&huart1, (uint8_t *)uartRx_data, 1);
 	}
 }
