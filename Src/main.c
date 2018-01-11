@@ -68,7 +68,7 @@ uint8_t t6_8[5];
 
 uint64_t tof;
 
-double distance;
+float distance;
 
 // Boolean variables
 uint8_t TxOk = 0;
@@ -88,6 +88,7 @@ int uartPress_enter = 0;
 int measure_counter = 0;
 float moy_distance = 0;
 float moy_tof = 0;
+float sum_square = 0;
 int old_antenna_delay = ANTENNA_DELAY;
 /* USER CODE END PV */
 
@@ -254,8 +255,7 @@ int main(void)
 				}
 			break;
 				
-			case STATE_COMPUTE_DISTANCE :
-				__NOP;
+			case STATE_COMPUTE_DISTANCE :{
 				uint64_t TroundA = (t4-t1);
 				uint64_t TreplyB = (t3-t2);
 				uint64_t TroundB = (t6-t3);
@@ -268,9 +268,12 @@ int main(void)
 				distance = distancepicosec * 299792458 * 0.000001;
 				if (distance > 100){distance = moy_distance;}
 				// antenna tunning
-				moy_distance = moy_distance + ((distance-moy_distance)/measure_counter);
-				moy_tof = moy_tof + ((tofdouble-moy_tof)/measure_counter);	
 				measure_counter++;
+				float delta = distance - moy_distance;
+				moy_distance = moy_distance + (delta/measure_counter);
+				float delta2 = distance - moy_distance;
+				sum_square = sum_square + delta*delta2;
+				moy_tof = moy_tof + ((tofdouble-moy_tof)/measure_counter);
 				#ifdef UART_PLUGGED
 				__disable_irq();
 				uartLen = sprintf(uartBuffer, "Distance = %f / Moyenne = %f / mesure %d / ant %d \r\n", distance, moy_distance, measure_counter, old_antenna_delay);
@@ -280,9 +283,10 @@ int main(void)
 				if (measure_counter >100){
 					float tof_theorique = (THEORETICAL_DISTANCE/(299702547 * 0.000001))*128*499.2;
 					int ant_error = (moy_tof-tof_theorique)/2;
+					float variance = sum_square / (measure_counter -1 );
 					#ifdef UART_PLUGGED
 					__disable_irq();
-					uartLen = sprintf(uartBuffer, "\r \nSample finished; antenna error is 0x%04X /distance : %f \r \n", ant_error, moy_distance);
+					uartLen = sprintf(uartBuffer, "\r \nantenna error : 0x%04X /distance : %f / var : %f\r \n", ant_error, moy_distance, variance);
 					HAL_UART_Transmit(&huart1, (uint8_t *)uartBuffer, uartLen, HAL_MAX_DELAY);
 					__enable_irq();
 					#endif
@@ -293,6 +297,7 @@ int main(void)
 					measure_counter = 0;
 					uartPress_enter = 0;
 					moy_distance = 0;
+					sum_square = 0;
 					#ifdef UART_PLUGGED
 					__disable_irq();
 					uartLen = sprintf(uartBuffer, "Restart\r \n");
@@ -302,7 +307,7 @@ int main(void)
 					state = STATE_INIT;
 				}
 				state = STATE_INIT;
-			break;
+			break;}
 		}
 #endif
 		

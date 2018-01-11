@@ -101,9 +101,9 @@
 
 /* USER CODE BEGIN Private defines */
 // board switching
-//#define UART_PLUGGED
 //#define SLAVE_BOARD
 #define MASTER_BOARD
+#define UART_PLUGGED
 
 // Antenna calibration					// 0x8246 to test 
 #define ANTENNA_DELAY 					0x8338//0x40BC //0x4034//0x8066  /!\ From decarduino 
