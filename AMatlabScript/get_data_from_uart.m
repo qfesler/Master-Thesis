@@ -5,3 +5,7 @@ for i = 1:1000
     datas(i) = fgetl(s);
 end
 plot(datas);
+%function to use with the data
+histcounts
+
+gfit

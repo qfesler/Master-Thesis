@@ -66,7 +66,7 @@ uint8_t t4_8[5];
 uint8_t t5_8[5];
 uint8_t t6_8[5];
 
-uint64_t tof;
+double tof;
 
 float distance;
 
@@ -144,12 +144,12 @@ int main(void)
 	state = STATE_INIT;
 	
 	HAL_UART_Receive_IT(&huart1, (uint8_t *)uartRx_data, 1);
-	#ifdef UART_PLUGGED
-	__disable_irq();
-	uartLen = sprintf(uartBuffer, "Hello World ! \r\n");
-	HAL_UART_Transmit(&huart1, (uint8_t *)uartBuffer, uartLen, HAL_MAX_DELAY);
-	__enable_irq();
-	#endif
+//	#ifdef UART_PLUGGED
+//	__disable_irq();
+//	uartLen = sprintf(uartBuffer, "Hello World ! \r\n");
+//	HAL_UART_Transmit(&huart1, (uint8_t *)uartBuffer, uartLen, HAL_MAX_DELAY);
+//	__enable_irq();
+//	#endif
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -250,8 +250,13 @@ int main(void)
 						t5 = (t5 << 8) | t5_8[4-i];
 						t6 = (t6 << 8) | t6_8[4-i];
 					}
-					state = STATE_COMPUTE_DISTANCE;
-					RxOk = 0;
+					if (t6 < t2 || t5 < t1){
+						state = STATE_INIT;
+					}
+					else{
+						state = STATE_COMPUTE_DISTANCE;
+						RxOk = 0;
+					}
 				}
 			break;
 				
@@ -260,33 +265,36 @@ int main(void)
 				uint64_t TreplyB = (t3-t2);
 				uint64_t TroundB = (t6-t3);
 				uint64_t TreplyA = (t5-t4);
-				tof = (TroundA - TreplyB) + (TroundB-TreplyA);
+				tof = (TroundA + TroundB) - (TreplyA + TreplyB);
 				tof = tof /4;
-				if (TreplyB > TroundA){tof = 0;}
-				double tofdouble = 1.0*tof;
-				double distancepicosec = tofdouble /(128*499.2);
-				distance = distancepicosec * 299792458 * 0.000001;
-				if (distance > 100){distance = moy_distance;}
-				// antenna tunning
-				measure_counter++;
-				float delta = distance - moy_distance;
-				moy_distance = moy_distance + (delta/measure_counter);
-				float delta2 = distance - moy_distance;
-				sum_square = sum_square + delta*delta2;
-				moy_tof = moy_tof + ((tofdouble-moy_tof)/measure_counter);
-				#ifdef UART_PLUGGED
-				__disable_irq();
-				uartLen = sprintf(uartBuffer, "Distance = %f / Moyenne = %f / mesure %d / ant %d \r\n", distance, moy_distance, measure_counter, old_antenna_delay);
-				HAL_UART_Transmit(&huart1, (uint8_t *)uartBuffer, uartLen, HAL_MAX_DELAY);
-				__enable_irq();
-				#endif
-				if (measure_counter >100){
+				if (TreplyB > TroundA){
+					tof = 0;
+				}
+				else{
+					double distancepicosec = tof/(128*499.2);
+					distance = distancepicosec * 299792458 * 0.000001;
+					// antenna tunning
+					measure_counter++;
+					float delta = distance - moy_distance;
+					moy_distance = moy_distance + (delta/measure_counter);
+					float delta2 = distance - moy_distance;
+					sum_square = sum_square + delta*delta2;
+					moy_tof = moy_tof + ((tof-moy_tof)/measure_counter);
+					#ifdef UART_PLUGGED
+					__disable_irq();
+					uartLen = sprintf(uartBuffer,"%f\n",distance);
+					//uartLen = sprintf(uartBuffer, "Distance = %f / Moyenne = %f / mesure %d / ant %d \r\n", distance, moy_distance, measure_counter, old_antenna_delay);
+					HAL_UART_Transmit(&huart1, (uint8_t *)uartBuffer, uartLen, HAL_MAX_DELAY);
+					__enable_irq();
+					#endif
+				}
+				if (measure_counter >1000){
 					float tof_theorique = (THEORETICAL_DISTANCE/(299702547 * 0.000001))*128*499.2;
-					int ant_error = (moy_tof-tof_theorique)/2;
+					int ant_error = (moy_tof-tof_theorique);
 					float variance = sum_square / (measure_counter -1 );
 					#ifdef UART_PLUGGED
 					__disable_irq();
-					uartLen = sprintf(uartBuffer, "\r \nantenna error : 0x%04X /distance : %f / var : %f\r \n", ant_error, moy_distance, variance);
+					uartLen = sprintf(uartBuffer, "end antenna error : 0x%04X /distance : %f / var : %f\n", ant_error, moy_distance, variance);
 					HAL_UART_Transmit(&huart1, (uint8_t *)uartBuffer, uartLen, HAL_MAX_DELAY);
 					__enable_irq();
 					#endif
