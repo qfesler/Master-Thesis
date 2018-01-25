@@ -273,20 +273,22 @@ int main(void)
 				else{
 					double distancepicosec = tof/(128*499.2);
 					distance = distancepicosec * 299792458 * 0.000001;
-					// antenna tunning
-					measure_counter++;
-					float delta = distance - moy_distance;
-					moy_distance = moy_distance + (delta/measure_counter);
-					float delta2 = distance - moy_distance;
-					sum_square = sum_square + delta*delta2;
-					moy_tof = moy_tof + ((tof-moy_tof)/measure_counter);
-					#ifdef UART_PLUGGED
-					__disable_irq();
-					uartLen = sprintf(uartBuffer,"%f\n",distance);
-					//uartLen = sprintf(uartBuffer, "Distance = %f / Moyenne = %f / mesure %d / ant %d \r\n", distance, moy_distance, measure_counter, old_antenna_delay);
-					HAL_UART_Transmit(&huart1, (uint8_t *)uartBuffer, uartLen, HAL_MAX_DELAY);
-					__enable_irq();
-					#endif
+					if (distance < 100){
+						// antenna tunning
+						measure_counter++;
+						float delta = distance - moy_distance;
+						moy_distance = moy_distance + (delta/measure_counter);
+						float delta2 = distance - moy_distance;
+						sum_square = sum_square + delta*delta2;
+						moy_tof = moy_tof + ((tof-moy_tof)/measure_counter);
+						#ifdef UART_PLUGGED
+						__disable_irq();
+						uartLen = sprintf(uartBuffer,"%f\n",distance);
+						//uartLen = sprintf(uartBuffer, "Distance = %f / Moyenne = %f / mesure %d / ant %d \r\n", distance, moy_distance, measure_counter, old_antenna_delay);
+						HAL_UART_Transmit(&huart1, (uint8_t *)uartBuffer, uartLen, HAL_MAX_DELAY);
+						__enable_irq();
+						#endif
+					}
 				}
 				if (measure_counter >1000){
 					float tof_theorique = (THEORETICAL_DISTANCE/(299702547 * 0.000001))*128*499.2;
