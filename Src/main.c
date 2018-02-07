@@ -146,7 +146,7 @@ int main(void)
 	HAL_UART_Receive_IT(&huart1, (uint8_t *)uartRx_data, 1);
 //	#ifdef UART_PLUGGED
 //	__disable_irq();
-//	uartLen = sprintf(uartBuffer, "Hello World ! \r\n");
+//	uartLen = sprintf(uartBuffer, "Start \n");
 //	HAL_UART_Transmit(&huart1, (uint8_t *)uartBuffer, uartLen, HAL_MAX_DELAY);
 //	__enable_irq();
 //	#endif
@@ -169,7 +169,7 @@ int main(void)
 					HAL_GPIO_WritePin(GPIOC, LD5_Pin, GPIO_PIN_RESET);
 					HAL_GPIO_WritePin(GPIOC, LD6_Pin, GPIO_PIN_RESET);
 					
-					HAL_Delay(1); // 1sec between 2 measures
+					HAL_Delay(1); // 1msec between 2 measures
 				
 					//Send first data
 					TxData[0] = MASTER_FIRST_MESSAGE;
@@ -203,7 +203,7 @@ int main(void)
 						DWM_ReadSPI_ext(RX_TIME, NO_SUB, t4_8, 5);
 						
 						//Send second time
-						HAL_Delay(1);
+						//HAL_Delay(1);
 						TxData[0] = MASTER_SECOND_MESSAGE;
 						DWM_SendData(TxData, 1);
 						state = STATE_WAIT_SECOND_SEND;
@@ -267,29 +267,37 @@ int main(void)
 				uint64_t TreplyA = (t5-t4);
 				tof = (TroundA + TroundB) - (TreplyA + TreplyB);
 				tof = tof /4;
+//				#ifdef UART_PLUGGED  //Printing the treply IN DW UNIT
+//				__disable_irq();
+//				uartLen = sprintf(uartBuffer,"TrepB : %" PRIu64 "/ TrepA : %" PRIu64 "\n", TreplyB, TreplyA);
+//				HAL_UART_Transmit(&huart1, (uint8_t *)uartBuffer, uartLen, HAL_MAX_DELAY);
+//				__enable_irq();
+//				#endif
 				if (TreplyB > TroundA){
 					tof = 0;
+					distance = 0;
 				}
 				else{
 					double distancepicosec = tof/(128*499.2);
 					distance = distancepicosec * 299792458 * 0.000001;
-					if (distance < 100){
-						// antenna tunning
-						measure_counter++;
-						float delta = distance - moy_distance;
-						moy_distance = moy_distance + (delta/measure_counter);
-						float delta2 = distance - moy_distance;
-						sum_square = sum_square + delta*delta2;
-						moy_tof = moy_tof + ((tof-moy_tof)/measure_counter);
-						#ifdef UART_PLUGGED
-						__disable_irq();
-						uartLen = sprintf(uartBuffer,"%f\n",distance);
-						//uartLen = sprintf(uartBuffer, "Distance = %f / Moyenne = %f / mesure %d / ant %d \r\n", distance, moy_distance, measure_counter, old_antenna_delay);
-						HAL_UART_Transmit(&huart1, (uint8_t *)uartBuffer, uartLen, HAL_MAX_DELAY);
-						__enable_irq();
-						#endif
-					}
 				}
+				if (distance < 100){
+					// antenna tunning
+					measure_counter++;
+					float delta = distance - moy_distance;
+					moy_distance = moy_distance + (delta/measure_counter);
+					float delta2 = distance - moy_distance;
+					sum_square = sum_square + delta*delta2;
+					moy_tof = moy_tof + ((tof-moy_tof)/measure_counter);
+					#ifdef UART_PLUGGED
+					__disable_irq();
+					uartLen = sprintf(uartBuffer,"%f\n",distance);
+					//uartLen = sprintf(uartBuffer, "Distance = %f / Moyenne = %f / mesure %d / ant %d \r\n", distance, moy_distance, measure_counter, old_antenna_delay);
+					HAL_UART_Transmit(&huart1, (uint8_t *)uartBuffer, uartLen, HAL_MAX_DELAY);
+					__enable_irq();
+					#endif
+				}
+				
 				if (measure_counter >1000){
 					float tof_theorique = (THEORETICAL_DISTANCE/(299702547 * 0.000001))*128*499.2;
 					int ant_error = (moy_tof-tof_theorique);
@@ -357,7 +365,7 @@ int main(void)
 			case STATE_MESSAGE_1:
 				// get T2
 				DWM_ReadSPI_ext(RX_TIME,NO_SUB, t2_8,5);
-				HAL_Delay(1);
+				//HAL_Delay(1);
 				TxData[0] = SLAVE_STANDARD_MESSAGE;
 				DWM_SendData(TxData, 1);
 				state = STATE_SEND_RESPONSE;
