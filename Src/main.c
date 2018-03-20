@@ -46,6 +46,7 @@
 #include "dwm1000.h"
 #include <string.h>
 #include <inttypes.h>
+#include <math.h>
 /* USER CODE END Includes */
 
 /* Private variables ---------------------------------------------------------*/
@@ -69,6 +70,8 @@ uint8_t t6_8[5];
 double tof;
 
 float distance;
+float distanceMeasured;
+float correctivePol[] = { -0.0081, 0.0928, 0.6569, -0.0612}; // Obtained from matlab
 
 // Boolean variables
 uint8_t TxOk = 0;
@@ -279,23 +282,30 @@ int main(void)
 				}
 				else{
 					double distancepicosec = tof/(128*499.2);
-					distance = distancepicosec * 299792458 * 0.000001;
-				}
-				if (distance < 100){
-					// antenna tunning
-					measure_counter++;
-					float delta = distance - moy_distance;
-					moy_distance = moy_distance + (delta/measure_counter);
-					float delta2 = distance - moy_distance;
-					sum_square = sum_square + delta*delta2;
-					moy_tof = moy_tof + ((tof-moy_tof)/measure_counter);
-					#ifdef UART_PLUGGED
-					__disable_irq();
-					uartLen = sprintf(uartBuffer,"%f\n",distance);
-					//uartLen = sprintf(uartBuffer, "Distance = %f / Moyenne = %f / mesure %d / ant %d \r\n", distance, moy_distance, measure_counter, old_antenna_delay);
-					HAL_UART_Transmit(&huart1, (uint8_t *)uartBuffer, uartLen, HAL_MAX_DELAY);
-					__enable_irq();
-					#endif
+					distanceMeasured = distancepicosec * 299792458 * 0.000001;
+					distance = correctivePol[0];
+					for (int i = 1; i < 4; i++){
+						// polynom evaluation
+						distance = distance * distanceMeasured + correctivePol[i];
+					}
+					
+				
+					if (distance < 100){
+						// antenna tunning
+						measure_counter++;
+						float delta = distance - moy_distance;
+						moy_distance = moy_distance + (delta/measure_counter);
+						float delta2 = distance - moy_distance;
+						sum_square = sum_square + delta*delta2;
+						moy_tof = moy_tof + ((tof-moy_tof)/measure_counter);
+						#ifdef UART_PLUGGED
+						__disable_irq();
+						uartLen = sprintf(uartBuffer,"%f\n",distance);
+						//uartLen = sprintf(uartBuffer, "Distance = %f / Moyenne = %f / mesure %d / ant %d \r\n", distance, moy_distance, measure_counter, old_antenna_delay);
+						HAL_UART_Transmit(&huart1, (uint8_t *)uartBuffer, uartLen, HAL_MAX_DELAY);
+						__enable_irq();
+						#endif
+					}
 				}
 				
 				if (measure_counter >1000){
