@@ -59,6 +59,11 @@ UART_HandleTypeDef huart1;
 uint8_t RxData[128];
 uint8_t TxData[128];
 
+int SlaveNummer = 1;
+uint8_t master_first_message;
+uint8_t master_second_message;
+uint8_t slave_standard_message;
+
 uint64_t t1, t2, t3, t4, t5, t6;
 uint8_t t1_8[5];
 uint8_t t2_8[5];
@@ -70,6 +75,7 @@ uint8_t t6_8[5];
 double tof;
 
 float distance;
+float distancemm[3];
 float distanceMeasured;
 float correctivePol[] = { -0.0081, 0.0928, 0.6569, -0.0612}; // Obtained from matlab
 
@@ -164,179 +170,200 @@ int main(void)
   /* USER CODE BEGIN 3 */
 #ifdef MASTER_BOARD
 		switch (state){
-			case STATE_INIT :
-					// IDLE to save Power
-					DWM_Disable_Rx();
-					HAL_GPIO_WritePin(GPIOC, LD3_Pin, GPIO_PIN_SET);
-					HAL_GPIO_WritePin(GPIOC, LD4_Pin, GPIO_PIN_RESET);
-					HAL_GPIO_WritePin(GPIOC, LD5_Pin, GPIO_PIN_RESET);
-					HAL_GPIO_WritePin(GPIOC, LD6_Pin, GPIO_PIN_RESET);
-					
-					HAL_Delay(1); // 1msec between 2 measures
-				
-					//Send first data
-					TxData[0] = MASTER_FIRST_MESSAGE;
-					DWM_SendData(TxData, 1);
-				
-					//Change state to wait TX OK (polling)
-					state = STATE_WAIT_FIRST_SEND;
-			break;
-			
-			case STATE_WAIT_FIRST_SEND:
-				if (TxOk){
-					//get tx time (T1)
-					DWM_ReadSPI_ext(TX_TIME, NO_SUB, t1_8, 5);
-					state = STATE_WAIT_RESPONSE;
-					TxOk = 0;
-					HAL_GPIO_WritePin(GPIOC, LD5_Pin, GPIO_PIN_SET);
-				}	
-			break;
-				
-			case STATE_WAIT_RESPONSE:
-				if (RxError){
-					RxError = 0;
-					state = STATE_INIT;
-				}
-				if (RxOk){
-					// Read Rx buffer
-					DWM_ReceiveData(RxData);
-					// Check RxFrame
-					if (RxData[0] == SLAVE_STANDARD_MESSAGE){
-						//get rx time (t4)
-						DWM_ReadSPI_ext(RX_TIME, NO_SUB, t4_8, 5);
+				case STATE_INIT :
+						if (SlaveNummer > 3){SlaveNummer = 1;}
+						if (SlaveNummer == 1){
+							master_first_message = 0x11;
+							master_second_message	= 0x21;
+							slave_standard_message	= 0x1A;
+						}
+						else if (SlaveNummer == 2){
+							master_first_message = 0x12;
+							master_second_message	= 0x22;
+							slave_standard_message	= 0x2A;
+						}
+						else {
+							master_first_message = 0x13;
+							master_second_message	= 0x23;
+							slave_standard_message	= 0x3A;
+						}
+						// IDLE to save Power
+						DWM_Disable_Rx();
+						HAL_GPIO_WritePin(GPIOC, LD3_Pin, GPIO_PIN_SET);
+						HAL_GPIO_WritePin(GPIOC, LD4_Pin, GPIO_PIN_RESET);
+						HAL_GPIO_WritePin(GPIOC, LD5_Pin, GPIO_PIN_RESET);
+						HAL_GPIO_WritePin(GPIOC, LD6_Pin, GPIO_PIN_RESET);
 						
-						//Send second time
-						//HAL_Delay(1);
-						TxData[0] = MASTER_SECOND_MESSAGE;
-						DWM_SendData(TxData, 1);
-						state = STATE_WAIT_SECOND_SEND;
-						HAL_GPIO_WritePin(GPIOC, LD6_Pin, GPIO_PIN_SET);
-					}
-					else {
-						state = STATE_INIT;
-					}
-					RxOk = 0;
-				}
-			break;
-				
-			case STATE_WAIT_SECOND_SEND:
-					if (TxOk){
-					//get tx time (T5)
-						DWM_ReadSPI_ext(TX_TIME, NO_SUB, t5_8, 5);
-						state = STATE_GET_TIMES;
-						TxOk = 0;
-				}
-			break;
-			
-			case STATE_GET_TIMES:
-				if (RxError){
-					state = STATE_INIT;
-					RxError = 0;
-				}
-				if (RxOk){
-					//Read Rx Buffer
-					DWM_ReceiveData(RxData);
+						HAL_Delay(1); // 1msec between 2 measures
 					
-					HAL_GPIO_WritePin(GPIOC, LD4_Pin, GPIO_PIN_SET);
-					for (int i=0;i<5;i++){
-						t2_8[i] = RxData[i];
-						t3_8[i] = RxData[i+5];
-						t6_8[i] = RxData[i+10];
-					}
-					// Cast all times to uint64
-					t1 = t2 = t3 = t4 = t5 = t6 = 0;
-					for (int i=0;i<5;i++){
-						t1 = (t1 << 8) | t1_8[4-i];
-						t2 = (t2 << 8) | t2_8[4-i];
-						t3 = (t3 << 8) | t3_8[4-i];
-						t4 = (t4 << 8) | t4_8[4-i];
-						t5 = (t5 << 8) | t5_8[4-i];
-						t6 = (t6 << 8) | t6_8[4-i];
-					}
-					if (t6 < t2 || t5 < t1){
+						//Send first data
+						TxData[0] = master_first_message;
+						DWM_SendData(TxData, 1);
+					
+						//Change state to wait TX OK (polling)
+						state = STATE_WAIT_FIRST_SEND;
+				break;
+				
+				case STATE_WAIT_FIRST_SEND:
+					if (TxOk){
+						//get tx time (T1)
+						DWM_ReadSPI_ext(TX_TIME, NO_SUB, t1_8, 5);
+						state = STATE_WAIT_RESPONSE;
+						TxOk = 0;
+						HAL_GPIO_WritePin(GPIOC, LD5_Pin, GPIO_PIN_SET);
+					}	
+				break;
+					
+				case STATE_WAIT_RESPONSE:
+					if (RxError){
+						RxError = 0;
 						state = STATE_INIT;
 					}
-					else{
-						state = STATE_COMPUTE_DISTANCE;
+					if (RxOk){
+						// Read Rx buffer
+						DWM_ReceiveData(RxData);
+						// Check RxFrame
+						if (RxData[0] == slave_standard_message){
+							//get rx time (t4)
+							DWM_ReadSPI_ext(RX_TIME, NO_SUB, t4_8, 5);
+							
+							//Send second time
+							//HAL_Delay(1);
+							TxData[0] = master_second_message;
+							DWM_SendData(TxData, 1);
+							state = STATE_WAIT_SECOND_SEND;
+							HAL_GPIO_WritePin(GPIOC, LD6_Pin, GPIO_PIN_SET);
+						}
+						else {
+							state = STATE_INIT;
+						}
 						RxOk = 0;
 					}
-				}
-			break;
+				break;
+					
+				case STATE_WAIT_SECOND_SEND:
+						if (TxOk){
+						//get tx time (T5)
+							DWM_ReadSPI_ext(TX_TIME, NO_SUB, t5_8, 5);
+							state = STATE_GET_TIMES;
+							TxOk = 0;
+					}
+				break;
 				
-			case STATE_COMPUTE_DISTANCE :{
-				uint64_t TroundA = (t4-t1);
-				uint64_t TreplyB = (t3-t2);
-				uint64_t TroundB = (t6-t3);
-				uint64_t TreplyA = (t5-t4);
-				tof = (TroundA + TroundB) - (TreplyA + TreplyB);
-				tof = tof /4;
-//				#ifdef UART_PLUGGED  //Printing the treply IN DW UNIT
-//				__disable_irq();
-//				uartLen = sprintf(uartBuffer,"TrepB : %" PRIu64 "/ TrepA : %" PRIu64 "\n", TreplyB, TreplyA);
-//				HAL_UART_Transmit(&huart1, (uint8_t *)uartBuffer, uartLen, HAL_MAX_DELAY);
-//				__enable_irq();
-//				#endif
-				if (TreplyB > TroundA){
-					tof = 0;
-					distance = 0;
-				}
-				else{
-					double distancepicosec = tof/(128*499.2);
-					distanceMeasured = distancepicosec * 299792458 * 0.000001;
-					distance = correctivePol[0];
-					for (int i = 1; i < 4; i++){
-						// polynom evaluation
-						distance = distance * distanceMeasured + correctivePol[i];
+				case STATE_GET_TIMES:
+					if (RxError){
+						state = STATE_INIT;
+						RxError = 0;
+					}
+					if (RxOk){
+						//Read Rx Buffer
+						DWM_ReceiveData(RxData);
+						
+						HAL_GPIO_WritePin(GPIOC, LD4_Pin, GPIO_PIN_SET);
+						for (int i=0;i<5;i++){
+							t2_8[i] = RxData[i];
+							t3_8[i] = RxData[i+5];
+							t6_8[i] = RxData[i+10];
+						}
+						// Cast all times to uint64
+						t1 = t2 = t3 = t4 = t5 = t6 = 0;
+						for (int i=0;i<5;i++){
+							t1 = (t1 << 8) | t1_8[4-i];
+							t2 = (t2 << 8) | t2_8[4-i];
+							t3 = (t3 << 8) | t3_8[4-i];
+							t4 = (t4 << 8) | t4_8[4-i];
+							t5 = (t5 << 8) | t5_8[4-i];
+							t6 = (t6 << 8) | t6_8[4-i];
+						}
+						if (t6 < t2 || t5 < t1){
+							state = STATE_INIT;
+						}
+						else{
+							state = STATE_COMPUTE_DISTANCE;
+							RxOk = 0;
+						}
+					}
+				break;
+					
+				case STATE_COMPUTE_DISTANCE :{
+					uint64_t TroundA = (t4-t1);
+					uint64_t TreplyB = (t3-t2);
+					uint64_t TroundB = (t6-t3);
+					uint64_t TreplyA = (t5-t4);
+					tof = (TroundA + TroundB) - (TreplyA + TreplyB);
+					tof = tof /4;
+					if (TreplyB > TroundA){
+						tof = 0;
+						distance = 0;
+					}
+					else{
+						double distancepicosec = tof/(128*499.2);
+						distanceMeasured = distancepicosec * 299792458 * 0.000001;
+						distance = correctivePol[0];
+						for (int i = 1; i < 4; i++){
+							// polynom evaluation
+							distance = distance * distanceMeasured + correctivePol[i];
+						}
+
+						if (distance < 100){
+							// antenna tunning
+							measure_counter++;
+							/* Mean and Var computation
+							float delta = distance - moy_distance;
+							moy_distance = moy_distance + (delta/measure_counter);
+							float delta2 = distance - moy_distance;
+							sum_square = sum_square + delta*delta2;
+							moy_tof = moy_tof + ((tof-moy_tof)/measure_counter);
+							*/
+							distancemm[SlaveNummer-1] = distance*1000;
+							if (SlaveNummer == 3){
+								#ifdef UART_PLUGGED
+								__disable_irq();
+								uartLen = sprintf(uartBuffer,"[%f,%f,%f]\n",distancemm[0],distancemm[1],distancemm[2]);
+								HAL_UART_Transmit(&huart1, (uint8_t *)uartBuffer, uartLen, HAL_MAX_DELAY);
+								__enable_irq();
+								#endif
+							}
+						}
 					}
 					
-				
-					if (distance < 100){
-						// antenna tunning
-						measure_counter++;
-						float delta = distance - moy_distance;
-						moy_distance = moy_distance + (delta/measure_counter);
-						float delta2 = distance - moy_distance;
-						sum_square = sum_square + delta*delta2;
-						moy_tof = moy_tof + ((tof-moy_tof)/measure_counter);
+					if (measure_counter >1000){
 						#ifdef UART_PLUGGED
 						__disable_irq();
-						uartLen = sprintf(uartBuffer,"%f\n",distance);
-						//uartLen = sprintf(uartBuffer, "Distance = %f / Moyenne = %f / mesure %d / ant %d \r\n", distance, moy_distance, measure_counter, old_antenna_delay);
+						uartLen = sprintf(uartBuffer, "end\n");
 						HAL_UART_Transmit(&huart1, (uint8_t *)uartBuffer, uartLen, HAL_MAX_DELAY);
 						__enable_irq();
 						#endif
+						/*
+						float tof_theorique = (THEORETICAL_DISTANCE/(299702547 * 0.000001))*128*499.2;
+						int ant_error = (moy_tof-tof_theorique);
+						float variance = sum_square / (measure_counter -1 );
+						#ifdef UART_PLUGGED
+						__disable_irq();
+						uartLen = sprintf(uartBuffer, "end antenna error : 0x%04X /distance : %f / var : %f\n", ant_error, moy_distance, variance);
+						HAL_UART_Transmit(&huart1, (uint8_t *)uartBuffer, uartLen, HAL_MAX_DELAY);
+						__enable_irq();
+						#endif
+						*/
+						while (!uartPress_enter){
+							HAL_GPIO_TogglePin(GPIOC, LD3_Pin);
+							HAL_Delay(100);
+						}
+						measure_counter = 0;
+						uartPress_enter = 0;
+						moy_distance = 0;
+						sum_square = 0;
+						#ifdef UART_PLUGGED
+						__disable_irq();
+						uartLen = sprintf(uartBuffer, "Restart\r \n");
+						HAL_UART_Transmit(&huart1, (uint8_t *)uartBuffer, uartLen, HAL_MAX_DELAY);
+						__enable_irq();
+						#endif
+						state = STATE_INIT;
 					}
-				}
-				
-				if (measure_counter >1000){
-					float tof_theorique = (THEORETICAL_DISTANCE/(299702547 * 0.000001))*128*499.2;
-					int ant_error = (moy_tof-tof_theorique);
-					float variance = sum_square / (measure_counter -1 );
-					#ifdef UART_PLUGGED
-					__disable_irq();
-					uartLen = sprintf(uartBuffer, "end antenna error : 0x%04X /distance : %f / var : %f\n", ant_error, moy_distance, variance);
-					HAL_UART_Transmit(&huart1, (uint8_t *)uartBuffer, uartLen, HAL_MAX_DELAY);
-					__enable_irq();
-					#endif
-					while (!uartPress_enter){
-						HAL_GPIO_TogglePin(GPIOC, LD3_Pin);
-						HAL_Delay(100);
-					}
-					measure_counter = 0;
-					uartPress_enter = 0;
-					moy_distance = 0;
-					sum_square = 0;
-					#ifdef UART_PLUGGED
-					__disable_irq();
-					uartLen = sprintf(uartBuffer, "Restart\r \n");
-					HAL_UART_Transmit(&huart1, (uint8_t *)uartBuffer, uartLen, HAL_MAX_DELAY);
-					__enable_irq();
-					#endif
 					state = STATE_INIT;
-				}
-				state = STATE_INIT;
-			break;}
-		}
+				break;}
+			}
 #endif
 		
 #ifdef SLAVE_BOARD

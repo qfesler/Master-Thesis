@@ -101,8 +101,12 @@
 
 /* USER CODE BEGIN Private defines */
 // board switching
-//#define SLAVE_BOARD
+//#define SLAVE1_BOARD
+//#define SLAVE2_BOARD
+//#define SLAVE3_BOARD
+
 #define MASTER_BOARD
+
 #define UART_PLUGGED
 
 // Antenna calibration					
@@ -111,9 +115,26 @@
 
 #define ADRESS_AND_PAN					0x000000FF
 
+#ifdef SLAVE1_BOARD
+#define SLAVE_BOARD
 #define MASTER_FIRST_MESSAGE				0x11
+#define MASTER_SECOND_MESSAGE				0x21
+#define SLAVE_STANDARD_MESSAGE			0x1A
+#endif
+
+#ifdef SLAVE2_BOARD
+#define SLAVE_BOARD
+#define MASTER_FIRST_MESSAGE				0x12
 #define MASTER_SECOND_MESSAGE				0x22
-#define SLAVE_STANDARD_MESSAGE			0xAA
+#define SLAVE_STANDARD_MESSAGE			0x2A
+#endif
+
+#ifdef SLAVE3_BOARD
+#define SLAVE_BOARD
+#define MASTER_FIRST_MESSAGE				0x13
+#define MASTER_SECOND_MESSAGE				0x23
+#define SLAVE_STANDARD_MESSAGE			0x3A
+#endif
 
 #define TX_OK_MASK							0x00000080 // TX OK
 #define RX_FINISHED_MASK				0x00002000 // RX FINISHED
