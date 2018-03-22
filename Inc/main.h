@@ -101,13 +101,13 @@
 
 /* USER CODE BEGIN Private defines */
 // board switching
-//#define SLAVE1_BOARD
+#define SLAVE1_BOARD
 //#define SLAVE2_BOARD
 //#define SLAVE3_BOARD
 
-#define MASTER_BOARD
+//#define MASTER_BOARD
 
-#define UART_PLUGGED
+//#define UART_PLUGGED
 
 // Antenna calibration					
 #define ANTENNA_DELAY 					0x8000 //Offset for error at -50cm  //0x8066 // precis 10cm 

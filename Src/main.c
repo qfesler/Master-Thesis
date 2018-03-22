@@ -153,12 +153,12 @@ int main(void)
 	state = STATE_INIT;
 	
 	HAL_UART_Receive_IT(&huart1, (uint8_t *)uartRx_data, 1);
-//	#ifdef UART_PLUGGED
-//	__disable_irq();
-//	uartLen = sprintf(uartBuffer, "Start \n");
-//	HAL_UART_Transmit(&huart1, (uint8_t *)uartBuffer, uartLen, HAL_MAX_DELAY);
-//	__enable_irq();
-//	#endif
+	#ifdef UART_PLUGGED
+	__disable_irq();
+	uartLen = sprintf(uartBuffer, "Start \n");
+	HAL_UART_Transmit(&huart1, (uint8_t *)uartBuffer, uartLen, HAL_MAX_DELAY);
+	__enable_irq();
+	#endif
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -198,6 +198,12 @@ int main(void)
 					
 						//Send first data
 						TxData[0] = master_first_message;
+													#ifdef UART_PLUGGED
+							__disable_irq();
+							uartLen = sprintf(uartBuffer, "%04x \n", master_first_message);
+							HAL_UART_Transmit(&huart1, (uint8_t *)uartBuffer, uartLen, HAL_MAX_DELAY);
+							__enable_irq();
+							#endif
 						DWM_SendData(TxData, 1);
 					
 						//Change state to wait TX OK (polling)
@@ -211,6 +217,7 @@ int main(void)
 						state = STATE_WAIT_RESPONSE;
 						TxOk = 0;
 						HAL_GPIO_WritePin(GPIOC, LD5_Pin, GPIO_PIN_SET);
+
 					}	
 				break;
 					
@@ -372,10 +379,24 @@ int main(void)
 				DWM_Enable_Rx();
 				HAL_Delay(1);
 				state = STATE_WAIT_RECEIVE;
-				HAL_GPIO_WritePin(GPIOC, LD3_Pin, GPIO_PIN_SET);
-				HAL_GPIO_WritePin(GPIOC, LD4_Pin, GPIO_PIN_RESET);
+				#ifdef SLAVE1_BOARD
+				HAL_GPIO_WritePin(GPIOC, LD3_Pin, GPIO_PIN_RESET);
+				HAL_GPIO_WritePin(GPIOC, LD4_Pin, GPIO_PIN_SET);
 				HAL_GPIO_WritePin(GPIOC, LD5_Pin, GPIO_PIN_RESET);
 				HAL_GPIO_WritePin(GPIOC, LD6_Pin, GPIO_PIN_RESET);
+				#endif
+				#ifdef SLAVE2_BOARD
+				HAL_GPIO_WritePin(GPIOC, LD3_Pin, GPIO_PIN_RESET);
+				HAL_GPIO_WritePin(GPIOC, LD4_Pin, GPIO_PIN_RESET);
+				HAL_GPIO_WritePin(GPIOC, LD5_Pin, GPIO_PIN_RESET);
+				HAL_GPIO_WritePin(GPIOC, LD6_Pin, GPIO_PIN_SET);
+				#endif
+				#ifdef SLAVE3_BOARD
+				HAL_GPIO_WritePin(GPIOC, LD3_Pin, GPIO_PIN_RESET);
+				HAL_GPIO_WritePin(GPIOC, LD4_Pin, GPIO_PIN_RESET);
+				HAL_GPIO_WritePin(GPIOC, LD5_Pin, GPIO_PIN_SET);
+				HAL_GPIO_WritePin(GPIOC, LD6_Pin, GPIO_PIN_RESET);
+				#endif
 			break;
 			
 			case STATE_WAIT_RECEIVE :
@@ -402,7 +423,7 @@ int main(void)
 			case STATE_MESSAGE_1:
 				// get T2
 				DWM_ReadSPI_ext(RX_TIME,NO_SUB, t2_8,5);
-				//HAL_Delay(1);
+				HAL_Delay(1);
 				TxData[0] = SLAVE_STANDARD_MESSAGE;
 				DWM_SendData(TxData, 1);
 				state = STATE_SEND_RESPONSE;
@@ -430,6 +451,7 @@ int main(void)
 					TxData[i+5] = t3_8[i];
 					TxData[i+10] = t6_8[i];
 				}
+				HAL_Delay(1);
 				DWM_SendData(TxData, 15);
 				
 				state = STATE_END_CYCLE;				

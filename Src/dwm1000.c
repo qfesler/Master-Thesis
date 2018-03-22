@@ -308,5 +308,6 @@ void DWM_ReceiveData(uint8_t* buffer){
 	//reading data
 	DWM_ReadSPI_ext(RX_BUFFER, NO_SUB, buffer, flen);
 	for (int i =0; i< flen ; i++){
+		
 	}
 }
