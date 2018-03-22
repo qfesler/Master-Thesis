@@ -198,12 +198,6 @@ int main(void)
 					
 						//Send first data
 						TxData[0] = master_first_message;
-													#ifdef UART_PLUGGED
-							__disable_irq();
-							uartLen = sprintf(uartBuffer, "%04x \n", master_first_message);
-							HAL_UART_Transmit(&huart1, (uint8_t *)uartBuffer, uartLen, HAL_MAX_DELAY);
-							__enable_irq();
-							#endif
 						DWM_SendData(TxData, 1);
 					
 						//Change state to wait TX OK (polling)
@@ -323,13 +317,23 @@ int main(void)
 							moy_tof = moy_tof + ((tof-moy_tof)/measure_counter);
 							*/
 							distancemm[SlaveNummer-1] = distance*1000;
+							SlaveNummer ++;
 							if (SlaveNummer == 3){
 								#ifdef UART_PLUGGED
 								__disable_irq();
-								uartLen = sprintf(uartBuffer,"[%f,%f,%f]\n",distancemm[0],distancemm[1],distancemm[2]);
+								uartLen = sprintf(uartBuffer,"[%f,%f,%f]\r\n",distancemm[0],distancemm[1],distancemm[2]);
 								HAL_UART_Transmit(&huart1, (uint8_t *)uartBuffer, uartLen, HAL_MAX_DELAY);
 								__enable_irq();
 								#endif
+								SlaveNummer = 1;
+							}
+							else {
+								#ifdef UART_PLUGGED
+							__disable_irq();
+							uartLen = sprintf(uartBuffer,"%f\n",distance);
+							HAL_UART_Transmit(&huart1, (uint8_t *)uartBuffer, uartLen, HAL_MAX_DELAY);
+							__enable_irq();
+							#endif
 							}
 						}
 					}
@@ -423,7 +427,7 @@ int main(void)
 			case STATE_MESSAGE_1:
 				// get T2
 				DWM_ReadSPI_ext(RX_TIME,NO_SUB, t2_8,5);
-				HAL_Delay(1);
+				//HAL_Delay(1);
 				TxData[0] = SLAVE_STANDARD_MESSAGE;
 				DWM_SendData(TxData, 1);
 				state = STATE_SEND_RESPONSE;
@@ -451,7 +455,7 @@ int main(void)
 					TxData[i+5] = t3_8[i];
 					TxData[i+10] = t6_8[i];
 				}
-				HAL_Delay(1);
+				//HAL_Delay(1);
 				DWM_SendData(TxData, 15);
 				
 				state = STATE_END_CYCLE;				
