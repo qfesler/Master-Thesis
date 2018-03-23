@@ -75,9 +75,11 @@ uint8_t t6_8[5];
 double tof;
 
 float distance;
-float distancemm[3];
+int distancemm[3];
 float distanceMeasured;
 float correctivePol[] = { -0.0081, 0.0928, 0.6569, -0.0612}; // Obtained from matlab
+float previousPos[2];
+	
 
 // Boolean variables
 uint8_t TxOk = 0;
@@ -106,6 +108,7 @@ void SystemClock_Config(void);
 static void MX_GPIO_Init(void);
 static void MX_SPI1_Init(void);
 static void MX_USART1_UART_Init(void);
+void trilateration2D(int ri[3], float prevPos[2]);
 
 /* USER CODE BEGIN PFP */
 /* Private function prototypes -----------------------------------------------*/
@@ -151,6 +154,9 @@ int main(void)
 	HAL_Delay(10); //time for the DW to go from Wakeup to init and then IDLE
 	DWM_Init();
 	state = STATE_INIT;
+	
+	previousPos[0] = STARTPOSITIONX;
+	previousPos[1] = STARTPOSITIONY;
 	
 	HAL_UART_Receive_IT(&huart1, (uint8_t *)uartRx_data, 1);
 	#ifdef UART_PLUGGED
@@ -317,15 +323,21 @@ int main(void)
 							moy_tof = moy_tof + ((tof-moy_tof)/measure_counter);
 							*/
 							distancemm[SlaveNummer-1] = distance*1000;
-							SlaveNummer ++;
 							if (SlaveNummer == 3){
 								#ifdef UART_PLUGGED
 								__disable_irq();
-								uartLen = sprintf(uartBuffer,"[%f,%f,%f]\r\n",distancemm[0],distancemm[1],distancemm[2]);
+								uartLen = sprintf(uartBuffer,"[%i,%i,%i]\r\n",distancemm[0],distancemm[1],distancemm[2]);
 								HAL_UART_Transmit(&huart1, (uint8_t *)uartBuffer, uartLen, HAL_MAX_DELAY);
 								__enable_irq();
 								#endif
-								SlaveNummer = 1;
+								trilateration2D(distancemm, previousPos);
+								#ifdef UART_PLUGGED
+								__disable_irq();
+								uartLen = sprintf(uartBuffer,"position : [%f , %f] \r\n",previousPos[0], previousPos[1]);
+								HAL_UART_Transmit(&huart1, (uint8_t *)uartBuffer, uartLen, HAL_MAX_DELAY);
+								__enable_irq();
+								#endif
+								SlaveNummer = 0;
 							}
 							else {
 								#ifdef UART_PLUGGED
@@ -334,7 +346,8 @@ int main(void)
 							HAL_UART_Transmit(&huart1, (uint8_t *)uartBuffer, uartLen, HAL_MAX_DELAY);
 							__enable_irq();
 							#endif
-							}
+							}							
+							SlaveNummer ++;
 						}
 					}
 					
@@ -416,11 +429,12 @@ int main(void)
 						state = STATE_MESSAGE_1;
 						HAL_GPIO_WritePin(GPIOC, LD5_Pin, GPIO_PIN_SET);
 					}
-					if (RxData[0] == MASTER_SECOND_MESSAGE){
+					else if (RxData[0] == MASTER_SECOND_MESSAGE){
 						state = STATE_MESSAGE_2;
 						HAL_GPIO_WritePin(GPIOC, LD4_Pin, GPIO_PIN_SET);
 					}
-					RxOk = 0;	
+					else {state = STATE_INIT;}
+					RxOk = 0;
 				}
 			break;
 				
@@ -687,6 +701,142 @@ static void MX_GPIO_Init(void)
 }
 
 /* USER CODE BEGIN 4 */
+
+void trilateration2D(int ri[3], float prevPos[2]){
+	int p[3][2];
+	p[0][0] = BEACONPOS1X;
+	p[0][1] = BEACONPOS1Y;
+	p[1][0] = BEACONPOS2X;
+	p[1][1] = BEACONPOS2Y;
+	p[2][0] = BEACONPOS3X;
+	p[2][1] = BEACONPOS3Y;
+
+	// computing a
+	float a[2] = {0,0};
+	int ppTp[2] = {0,0};
+	int rp[2] = {0,0};
+	for (int i=0; i<3;i++){
+		ppTp[0] += pow(p[i][0],3) + p[i][0] * pow(p[i][1],2);
+		ppTp[1] += pow(p[i][1],3) + p[i][1] * pow(p[i][0],2);
+		rp[0] += p[i][0] * pow(ri[i],2);
+		rp[1] += p[i][1] * pow(ri[i],2);
+	}
+	for (int i=0;i<2;i++){
+		a[i] = (ppTp[i]-rp[i])/3;
+	}
+
+	// computing B
+	float B[2][2] = {{0,0},{0,0}};
+	int ppT[2][2] = {{0,0},{0,0}};
+	int pTpI[2][2] = {{0,0},{0,0}};
+	int rI[2][2] = {{0,0},{0,0}};
+	for (int i=0;i<3;i++){
+		for(int j=0;j<2;j++){
+			for(int k=0;k<2;k++){
+				ppT[j][k] += p[i][j] * p[i][k];
+			}
+
+			pTpI[j][j] += pow(p[i][0],2) + pow(p[i][1],2);
+			rI[j][j] += pow(ri[i],2);
+		}
+	}
+	for (int i=0;i<2;i++){
+		for (int j=0;j<2;j++){
+			B[i][j] = (-2*ppT[i][j] - pTpI[i][j] + rI[i][j])/3;
+		}
+	}
+
+	// computing c
+	float c[2] = {0,0};
+	for (int i=0;i<3;i++){
+		for(int j=0;j<2;j++){
+				c[j] += p[i][j];
+		}
+	}
+	for (int i=0;i<2;i++){
+		c[i] = c[i]/3;
+	}
+
+
+	// computing f
+	float f[2] = {0,0};
+	float ccTc[2] = {0,0};
+	float Bc[2] = {0,0};
+	ccTc[0] = 2*(pow(c[0],3) + c[0] * pow(c[1],2));
+	ccTc[1] = 2*(pow(c[1],3) + c[1] * pow(c[0],2));
+	Bc[0] = B[0][0]*c[0] + B[0][1]*c[1];
+	Bc[1] = B[1][0]*c[0] + B[1][1]*c[1];
+	for (int i=0;i<2;i++){
+		f[i] = a[i] + Bc[i] + ccTc[i];
+	}
+
+
+	// computing f'
+	double fprime = f[0] - f[1];
+
+	// H
+	double H[2][2] = {{0,0},{0,0}};
+	double ccT[2][2] = {{0,0},{0,0}};
+	for(int i=0;i<2;i++){
+		for(int j=0;j<2;j++){
+			ccT[i][j] = c[i]*c[j];
+			H[i][j] = -2/3 * ppT [i][j] + 2*ccT[i][j];
+		}
+	}
+
+	// H'
+	double Hprime[2] = {H[0][0], H[0][1]};
+	for (int i=0;i<2;i++){
+		Hprime[i] -= H[1][i];
+	}
+
+	//Q
+	float Q = 1;
+
+	//U
+	//float U[2] = Hprime;
+
+	// qTq
+	float qTq = 0;
+	for (int i=0;i<3;i++){
+		qTq =+ pow(ri[i],2) - pTpI[0][0];
+	}
+	qTq = qTq/3 + pow(c[0],2) + pow(c[1],2);
+
+	// q2
+	float v1 = Q * fprime;
+	float q2candidate[2];
+	//quadratic equation
+	float aeq = 1 + (pow(Hprime[1],2)/pow(Hprime[0],2));
+	float beq = 2*Q*Hprime[1]/pow(Hprime[0],2);
+	float ceq = pow(Q,2)/pow(Hprime[0],2) - qTq;
+	float delta = pow(beq,2) - 4 * aeq*ceq;
+	q2candidate[0] = (-beq+sqrt(delta))/(2*aeq);
+	q2candidate[1] = (-beq-sqrt(delta))/(2*aeq);
+
+	// q1 & p0
+	float q1candidate[2];
+	float p0candidate[2][2];
+	for (int i=0;i<2;i++){
+		q1candidate[i] = -Q/Hprime[0] - (Hprime[1]/Hprime[0])*q2candidate[i];
+		p0candidate[i][0] = q1candidate[i] + c[0];
+		p0candidate[i][1] = q2candidate[i] + c[1];
+	}
+
+	// po
+	int distance[2];
+	for (int i = 0;i<2;i++){
+		distance[i] = pow(prevPos[0]-p0candidate[i][0] ,2) + pow(prevPos[1]-p0candidate[i][1] ,2);
+	}
+	if (distance[0] < distance[1]){
+		prevPos[0] = p0candidate[0][0];
+		prevPos[1] = p0candidate[0][1];
+	}
+	else{
+		prevPos[0] = p0candidate[1][0];
+		prevPos[1] = p0candidate[1][1];
+	}
+}
 
 void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin){
 	if (GPIO_Pin != SPI_IRQ_Pin){return;}

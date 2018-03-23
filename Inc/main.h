@@ -109,6 +109,24 @@
 
 #define UART_PLUGGED
 
+// Beacon positions
+#define BEACONPOS1X 		-94
+#define BEACONPOS1Y			50
+#define BEACONPOS2X 		-94
+#define BEACONPOS2Y			1950
+#define BEACONPOS3X 		3094
+#define BEACONPOS3Y			1000
+
+#define STARTPOSITIONX	0
+#define STARTPOSITIONY	0
+
+/*
+//Optimal
+float beacon1[2] = {-50,-50};
+float beacon2[2] = {3050,-50};
+float beacon3[2] = {1500,2050};
+*/
+
 // Antenna calibration					
 #define ANTENNA_DELAY 					0x8000 //Offset for error at -50cm  //0x8066 // precis 10cm 
 #define THEORETICAL_DISTANCE		5.1
