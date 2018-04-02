@@ -17,15 +17,19 @@ ser = serial.Serial('COM10')
 distance = 5
 while (looping):
     s = ser.readline()
-    sys.stdout.write(s)
+    #sys.stdout.write(s)
     if not ("end" in s):
-        s.rstrip()
-        templist = eval(s)
+        slist = s.rstrip()
+        templist = eval(slist)
         Measures.append(templist)
+        print(templist)
     if ("end" in s):
-        pyplot.plot(Measures[:][0],'r.')
-        pyplot.plot(Measures[:][1],'b.')
-        pyplot.plot(Measures[:][2],'g.')
+        Measures1 = [item[0] for item in Measures]
+        Measures2 = [item[1] for item in Measures]
+        Measures3 = [item[2] for item in Measures]
+        pyplot.plot(Measures1,'r.')
+        pyplot.plot(Measures2,'b.')
+        pyplot.plot(Measures3,'g.')
         #Moyenne = numpy.mean(Measures)
         #Variance = numpy.var(Measures)
         #print("Moyenne : " + str(Moyenne) + "/Variance : " + str(Variance))

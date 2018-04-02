@@ -159,12 +159,7 @@ int main(void)
 	previousPos[1] = STARTPOSITIONY;
 	
 	HAL_UART_Receive_IT(&huart1, (uint8_t *)uartRx_data, 1);
-	#ifdef UART_PLUGGED
-	__disable_irq();
-	uartLen = sprintf(uartBuffer, "Start \n");
-	HAL_UART_Transmit(&huart1, (uint8_t *)uartBuffer, uartLen, HAL_MAX_DELAY);
-	__enable_irq();
-	#endif
+	
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -324,29 +319,35 @@ int main(void)
 							*/
 							distancemm[SlaveNummer-1] = distance*1000;
 							if (SlaveNummer == 3){
+								/*
 								#ifdef UART_PLUGGED
 								__disable_irq();
 								uartLen = sprintf(uartBuffer,"[%i,%i,%i]\r\n",distancemm[0],distancemm[1],distancemm[2]);
 								HAL_UART_Transmit(&huart1, (uint8_t *)uartBuffer, uartLen, HAL_MAX_DELAY);
 								__enable_irq();
 								#endif
+								*/
 								trilateration2D(distancemm, previousPos);
+								/*
 								#ifdef UART_PLUGGED
 								__disable_irq();
 								uartLen = sprintf(uartBuffer,"position : [%f , %f] \r\n",previousPos[0], previousPos[1]);
 								HAL_UART_Transmit(&huart1, (uint8_t *)uartBuffer, uartLen, HAL_MAX_DELAY);
 								__enable_irq();
 								#endif
+								*/
 								SlaveNummer = 0;
 							}
+							/*
 							else {
-								#ifdef UART_PLUGGED
+							#ifdef UART_PLUGGED
 							__disable_irq();
 							uartLen = sprintf(uartBuffer,"%f\n",distance);
 							HAL_UART_Transmit(&huart1, (uint8_t *)uartBuffer, uartLen, HAL_MAX_DELAY);
 							__enable_irq();
 							#endif
-							}							
+							}
+							*/
 							SlaveNummer ++;
 						}
 					}
@@ -713,8 +714,8 @@ void trilateration2D(int ri[3], float prevPos[2]){
 
 	// computing a
 	float a[2] = {0,0};
-	int ppTp[2] = {0,0};
-	int rp[2] = {0,0};
+	float ppTp[2] = {0,0};
+	float rp[2] = {0,0};
 	for (int i=0; i<3;i++){
 		ppTp[0] += pow(p[i][0],3) + p[i][0] * pow(p[i][1],2);
 		ppTp[1] += pow(p[i][1],3) + p[i][1] * pow(p[i][0],2);
@@ -727,9 +728,9 @@ void trilateration2D(int ri[3], float prevPos[2]){
 
 	// computing B
 	float B[2][2] = {{0,0},{0,0}};
-	int ppT[2][2] = {{0,0},{0,0}};
-	int pTpI[2][2] = {{0,0},{0,0}};
-	int rI[2][2] = {{0,0},{0,0}};
+	float ppT[2][2] = {{0,0},{0,0}};
+	float pTpI[2][2] = {{0,0},{0,0}};
+	float rI[2][2] = {{0,0},{0,0}};
 	for (int i=0;i<3;i++){
 		for(int j=0;j<2;j++){
 			for(int k=0;k<2;k++){
@@ -769,14 +770,12 @@ void trilateration2D(int ri[3], float prevPos[2]){
 	for (int i=0;i<2;i++){
 		f[i] = a[i] + Bc[i] + ccTc[i];
 	}
-
-
 	// computing f'
-	double fprime = f[0] - f[1];
+	float fprime = f[0] - f[1];
 
 	// H
-	double H[2][2] = {{0,0},{0,0}};
-	double ccT[2][2] = {{0,0},{0,0}};
+	float H[2][2] = {{0,0},{0,0}};
+	float ccT[2][2] = {{0,0},{0,0}};
 	for(int i=0;i<2;i++){
 		for(int j=0;j<2;j++){
 			ccT[i][j] = c[i]*c[j];
@@ -824,7 +823,7 @@ void trilateration2D(int ri[3], float prevPos[2]){
 	}
 
 	// po
-	int distance[2];
+	float distance[2];
 	for (int i = 0;i<2;i++){
 		distance[i] = pow(prevPos[0]-p0candidate[i][0] ,2) + pow(prevPos[1]-p0candidate[i][1] ,2);
 	}
@@ -836,6 +835,20 @@ void trilateration2D(int ri[3], float prevPos[2]){
 		prevPos[0] = p0candidate[1][0];
 		prevPos[1] = p0candidate[1][1];
 	}
+	#ifdef UART_PLUGGED
+	__disable_irq();
+	uartLen = sprintf(uartBuffer,"[%i,%i,%i]\r\n",ri[0],ri[1],ri[2]);
+	HAL_UART_Transmit(&huart1, (uint8_t *)uartBuffer, uartLen, HAL_MAX_DELAY);
+	__enable_irq();
+	#endif
+	
+	#ifdef UART_PLUGGED
+	__disable_irq();
+	uartLen = sprintf(uartBuffer,"position : [%f , %f] \r\n",prevPos[0], prevPos[1]);
+	HAL_UART_Transmit(&huart1, (uint8_t *)uartBuffer, uartLen, HAL_MAX_DELAY);
+	__enable_irq();
+	#endif
+								
 }
 
 void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin){
