@@ -1,24 +1,34 @@
 clear all
 close all
-clc
+%clc
 csvfiles = dir('*.csv');
 means = [];
 realValues = [];
-
-realValue = 0.6;
+x = 0.2:0.1:5;
+%x = 200:100:5000;
+realValue = 0.2;
+variance = [];
+error = [];
 for file = csvfiles'
     realValues = [realValues,realValue];
     datas = csvread(file.name);
     datacorr = [];
     for i = datas
-       if i ~= 0
+       %if i ~= 0
           datacorr = [datacorr,i]; 
-       end
+       %end
     end
+    error = [error, mean(datacorr) - realValue];
+    variance = [variance, var(datacorr)];
     means = [means,mean(datacorr)];
     realValue = realValue + 0.1;
 end
 
-plot(realValues)
+plot(realValues,x,'linewidth',2)
 hold on
-plot(means,'r')
+plot(x,means,'r','linewidth',2)
+xlabel('Real Distance')
+ylabel('Measured Distance')
+legend('Real distances','Measures', 'location','NorthWest')
+ax = gca;
+ax.FontSize = 12;

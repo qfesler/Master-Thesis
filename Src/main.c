@@ -172,7 +172,11 @@ int main(void)
 #ifdef MASTER_BOARD
 		switch (state){
 				case STATE_INIT :
-						if (SlaveNummer > 3){SlaveNummer = 1;}
+						if (SlaveNummer > 3){
+							SlaveNummer = 1;
+							
+							//HAL_Delay(90); // 100msec between 2 measures / ~10ms by measure
+						}
 						if (SlaveNummer == 1){
 							master_first_message = 0x11;
 							master_second_message	= 0x21;
@@ -195,7 +199,7 @@ int main(void)
 						HAL_GPIO_WritePin(GPIOC, LD5_Pin, GPIO_PIN_RESET);
 						HAL_GPIO_WritePin(GPIOC, LD6_Pin, GPIO_PIN_RESET);
 						
-						HAL_Delay(1); // 1msec between 2 measures
+						HAL_Delay(1);
 					
 						//Send first data
 						TxData[0] = master_first_message;
@@ -309,34 +313,27 @@ int main(void)
 
 						if (distance < 100){
 							// antenna tunning
-							measure_counter++;
-							/* Mean and Var computation
-							float delta = distance - moy_distance;
-							moy_distance = moy_distance + (delta/measure_counter);
-							float delta2 = distance - moy_distance;
-							sum_square = sum_square + delta*delta2;
-							moy_tof = moy_tof + ((tof-moy_tof)/measure_counter);
-							*/
 							distancemm[SlaveNummer-1] = distance*1000;
 							if (SlaveNummer == 3){
-								/*
+								/*#ifdef UART_PLUGGED
+								__disable_irq();
+								uartLen = sprintf(uartBuffer,"[%i,%i,%i] \r\n",distancemm[0],distancemm[1],distancemm[2]);
+								HAL_UART_Transmit(&huart1, (uint8_t *)uartBuffer, uartLen, HAL_MAX_DELAY);
+								__enable_irq();
+								#endif*/
+								trilateration2D(distancemm, previousPos);						
 								#ifdef UART_PLUGGED
 								__disable_irq();
-								uartLen = sprintf(uartBuffer,"[%i,%i,%i]\r\n",distancemm[0],distancemm[1],distancemm[2]);
+								uartLen = sprintf(uartBuffer,"[%f , %f] #%i \r\n",previousPos[0], previousPos[1], measure_counter);
 								HAL_UART_Transmit(&huart1, (uint8_t *)uartBuffer, uartLen, HAL_MAX_DELAY);
 								__enable_irq();
 								#endif
-								*/
-								trilateration2D(distancemm, previousPos);
-								
-								#ifdef UART_PLUGGED
-								__disable_irq();
-								uartLen = sprintf(uartBuffer,"position : [%f , %f] \r\n",previousPos[0], previousPos[1]);
-								HAL_UART_Transmit(&huart1, (uint8_t *)uartBuffer, uartLen, HAL_MAX_DELAY);
-								__enable_irq();
-								#endif
-								
+								measure_counter ++ ;
 								SlaveNummer = 0;
+								if (measure_counter >= 1000){
+									state = END_STATE;
+									break;
+								}
 							}
 							/*
 							else {
@@ -352,41 +349,23 @@ int main(void)
 						}
 					}
 					
-					if (measure_counter >1000){
-						#ifdef UART_PLUGGED
+					state = STATE_INIT;
+				break;}
+				
+				case END_STATE:{
+					HAL_GPIO_WritePin(GPIOC, LD3_Pin, GPIO_PIN_SET);
+					HAL_GPIO_WritePin(GPIOC, LD4_Pin, GPIO_PIN_SET);
+					HAL_GPIO_WritePin(GPIOC, LD5_Pin, GPIO_PIN_SET);
+					HAL_GPIO_WritePin(GPIOC, LD6_Pin, GPIO_PIN_SET);
+					#ifdef UART_PLUGGED
 						__disable_irq();
 						uartLen = sprintf(uartBuffer, "end\n");
 						HAL_UART_Transmit(&huart1, (uint8_t *)uartBuffer, uartLen, HAL_MAX_DELAY);
 						__enable_irq();
-						#endif
-						/*
-						float tof_theorique = (THEORETICAL_DISTANCE/(299702547 * 0.000001))*128*499.2;
-						int ant_error = (moy_tof-tof_theorique);
-						float variance = sum_square / (measure_counter -1 );
-						#ifdef UART_PLUGGED
-						__disable_irq();
-						uartLen = sprintf(uartBuffer, "end antenna error : 0x%04X /distance : %f / var : %f\n", ant_error, moy_distance, variance);
-						HAL_UART_Transmit(&huart1, (uint8_t *)uartBuffer, uartLen, HAL_MAX_DELAY);
-						__enable_irq();
-						#endif
-						*/
-						while (!uartPress_enter){
-							HAL_GPIO_TogglePin(GPIOC, LD3_Pin);
-							HAL_Delay(100);
-						}
-						measure_counter = 0;
-						uartPress_enter = 0;
-						moy_distance = 0;
-						sum_square = 0;
-						#ifdef UART_PLUGGED
-						__disable_irq();
-						uartLen = sprintf(uartBuffer, "Restart\r \n");
-						HAL_UART_Transmit(&huart1, (uint8_t *)uartBuffer, uartLen, HAL_MAX_DELAY);
-						__enable_irq();
-						#endif
-						state = STATE_INIT;
+					#endif
+					while (1){					
+					HAL_Delay(1000);
 					}
-					state = STATE_INIT;
 				break;}
 			}
 #endif
@@ -792,6 +771,7 @@ void trilateration2D(int ri[3], float prevPos[2]){
 }
 
 void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin){
+	if (GPIO_Pin == B1_Pin) {state = END_STATE;}
 	if (GPIO_Pin != SPI_IRQ_Pin){return;}
 	uint8_t RxBuffer[4];
 	uint32_t StatusRegister;

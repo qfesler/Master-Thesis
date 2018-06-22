@@ -15,14 +15,17 @@ Measures = []
 looping = True
 ser = serial.Serial('COM10')
 distance = 5
+row = 9
+column = 20
 while (looping):
     s = ser.readline()
-    #sys.stdout.write(s)
+    sys.stdout.write(s)
     if not ("end" in s):
         slist = s.rstrip()
         templist = eval(slist)
-        Measures.append(templist)
-        print(templist)
+        if ((abs(templist[0]) < 3000) and (abs(templist[1]) <2000)):
+            Measures.append(templist)
+        #print(templist)
     if ("end" in s):
         Measures1 = [item[0] for item in Measures]
         Measures2 = [item[1] for item in Measures]
@@ -32,8 +35,11 @@ while (looping):
         #Variance = numpy.var(Measures)
         #print("Moyenne : " + str(Moyenne) + "/Variance : " + str(Variance))
         pyplot.show()
-        #write_list_to_file(Measures, str(distance)+".csv")
+        filename = "trajectory.csv"
+        write_list_to_file(Measures, filename)
         #distance -= 0.1
-        #Measures = []
+        column-=1
+        Measures = []
+        #break
     
     

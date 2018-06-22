@@ -110,15 +110,15 @@
 #define UART_PLUGGED
 
 // Beacon positions
-#define BEACONPOS1X 		-94
-#define BEACONPOS1Y			50
-#define BEACONPOS2X 		-94
-#define BEACONPOS2Y			1950
-#define BEACONPOS3X 		3094
+#define BEACONPOS1X 		0
+#define BEACONPOS1Y			0
+#define BEACONPOS2X 		0
+#define BEACONPOS2Y			2000
+#define BEACONPOS3X 		2800
 #define BEACONPOS3Y			1000
 
-#define STARTPOSITIONX	1500
-#define STARTPOSITIONY	1000
+#define STARTPOSITIONX	1400
+#define STARTPOSITIONY	1600
 
 /*
 //Optimal
@@ -167,6 +167,7 @@ float beacon3[2] = {1500,2050};
 #define STATE_WAIT_SECOND_SEND	4
 #define STATE_GET_TIMES					5
 #define STATE_COMPUTE_DISTANCE	6
+#define END_STATE								7
 
 // State Machine Slave
 #define STATE_INIT							1

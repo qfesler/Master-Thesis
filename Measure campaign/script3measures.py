@@ -34,8 +34,8 @@ while (looping):
         #Variance = numpy.var(Measures)
         #print("Moyenne : " + str(Moyenne) + "/Variance : " + str(Variance))
         pyplot.show()
-        #write_list_to_file(Measures, str(distance)+".csv")
+        write_list_to_file(Measures, "trilat.csv")
         #distance -= 0.1
-        Measures = []
+        break
     
     
